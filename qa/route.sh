@@ -74,7 +74,7 @@ sleep 5
 echo '=== Helm ownership, atomic failed update and old-data survival ==='
 helm lint chart
 helm template ticket-api chart -f chart/values-stage.yaml > evidence/rendered-stage.yaml
-kubectl --context kind-dva-course -n stage delete deployment ticket-api service ticket-api
+kubectl --context kind-dva-course -n stage delete deployment/ticket-api service/ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n stage -f chart/values-stage.yaml --atomic --wait --timeout 180s
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-installed.json
 if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f chart/values-stage.yaml --set probes.readinessPath=/not-ready --atomic --wait --timeout 45s; then echo 'Bad readiness accepted'; exit 1; fi
@@ -142,7 +142,7 @@ kubectl --context kind-dva-course -n stage scale deployment ticket-api --replica
 kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=180s
 
 echo '=== One CI-checked registry digest promoted dev then stage ==='
-kubectl --context kind-dva-course -n dev delete deployment ticket-api service ticket-api
+kubectl --context kind-dva-course -n dev delete deployment/ticket-api service/ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f chart/values-dev.yaml --atomic --wait --timeout 180s
 ./lab build-check
 ./lab registry
