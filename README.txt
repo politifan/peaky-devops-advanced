@@ -5,7 +5,7 @@ Peaky Minds: DevOps продвинутый — курс 301874, редакция
 Клонирование: git clone https://github.com/politifan/peaky-devops-advanced.git ~/advanced-lab
 cd ~/advanced-lab
 Установка Docker: https://docs.docker.com/engine/install/ubuntu/ либо https://docs.docker.com/engine/install/debian/
-Системные утилиты: sudo apt-get update && sudo apt-get install -y curl jq unzip openssh-client ansible python3-venv
+Системные утилиты: sudo apt-get update && sudo apt-get install -y git gh curl jq unzip openssh-client ansible python3-venv
 chmod +x lab scripts/*.sh
 docker version
 docker compose version
@@ -23,3 +23,5 @@ API доступен только на loopback. Приложение не со�
 Самопроверка не отправляет баллы в Stepik. External Grader не подключён.
 State, plan, runtime, private key, kubeconfig, секреты и дампы не входят в Git. Образ и открытые подтверждения связываются с commit; публикация evidence требует очистки.
 Полигон односерверный: два экземпляра не доказывают физическую HA. Vault и metrics-server — дополнительные варианты, не готовые сервисы обязательного комплекта.
+
+Готовым служебным CLI нужен системный интерпретатор версии 3.11 или новее; ученик его не программирует. Перед модулем 6: gh --version, gh auth login; создайте собственный fork и выберите gh repo set-default origin.

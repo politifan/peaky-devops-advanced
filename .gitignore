@@ -12,4 +12,3 @@ __pycache__/
 backups/
 foundation/.runtime/
 ansible/inventory.ini
-ansible/inventory.ini

@@ -12,6 +12,7 @@ diagnostics() {
 }
 trap diagnostics EXIT
 echo '=== Foundation: two instances and distinct environments ==='
+if [ "${QA_SCOPE:-full}" != ansible ]; then
 ./lab foundation-start stage
 ./lab foundation-start dev
 ./lab observe --a http://127.0.0.1:18210 --b http://127.0.0.1:18211 --write-cycle --label stage --out evidence/foundation-stage.json
@@ -27,6 +28,7 @@ docker compose -f foundation/compose.yaml --project-directory foundation -p dva-
 # Quiesce only this course's Compose services; persistent volumes stay present.
 docker compose -f foundation/compose.yaml --project-directory foundation -p dva-stage --env-file foundation/env.stage stop
 docker compose -f foundation/compose.yaml --project-directory foundation -p dva-dev --env-file foundation/env.dev stop
+fi
 echo '=== Terraform saved plan and Ansible second-run idempotence ==='
 ssh-keygen -q -t ed25519 -N '' -f .runtime/ansible-key
 printf 'public_key_file = "%s"\n' "$PWD/.runtime/ansible-key.pub" > infra/local.tfvars
@@ -70,6 +72,26 @@ grep -E 'node_a.*changed=0.*failed=0' evidence/ansible-repeat.txt
 grep -E 'node_b.*changed=0.*failed=0' evidence/ansible-repeat.txt
 curl -fsS http://127.0.0.1:22280/health
 if ansible-playbook -i ansible/inventory.ini ansible/playbook.yml -e 'lab_message=bad!'; then exit 1; fi
+if [ "${QA_SCOPE:-full}" = ansible ]; then
+ docker stop dva-node-b
+ if ansible-playbook -i ansible/inventory.ini ansible/playbook.yml; then echo 'Unreachable node accepted'; exit 1; fi
+ docker start dva-node-b
+ sleep 5
+ ansible-playbook -i ansible/inventory.ini ansible/playbook.yml --limit node_b
+ ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+ printf 'training_token: demo-only\n' > .runtime/vault.yml
+ openssl rand -hex 24 > .runtime/vault-pass
+ chmod 600 .runtime/vault.yml .runtime/vault-pass
+ ansible-vault encrypt .runtime/vault.yml --vault-password-file .runtime/vault-pass
+ grep -q '^\$ANSIBLE_VAULT;' .runtime/vault.yml
+ ansible-playbook -i ansible/inventory.ini ansible/secret.yml --vault-password-file .runtime/vault-pass
+ for node in dva-node-a dva-node-b; do
+  actual=$(docker exec "$node" stat -c '%U %G %a' /etc/dva/token)
+  test "$actual" = 'root root 600'
+ done
+ echo 'CONFIGURATION PASS: partial failure, corrected repeat, encrypted Vault input, root-only token metadata'
+ exit 0
+fi
 echo '=== Kubernetes startup and actual useful HTTP ==='
 ./lab kube-start
 kubectl --context kind-dva-course -n stage get deployment,service,pvc

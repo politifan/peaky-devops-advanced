@@ -1,0 +1,33 @@
+name: Advanced configuration acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  configuration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      QA_SCOPE: ansible
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - name: Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq unzip
+          chmod +x lab scripts/*.sh
+          ./lab tools
+      - name: Real SSH, partial failure and encrypted secret
+        run: bash qa/route.sh > configuration.log 2>&1
+      - name: Failure details
+        if: failure()
+        run: tail -n 80 configuration.log || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: advanced-configuration
+          path: |
+            configuration.log
+            evidence/ansible*.txt
+          retention-days: 30
