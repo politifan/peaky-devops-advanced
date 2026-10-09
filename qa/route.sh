@@ -96,9 +96,12 @@ test "$actual" = yes
 actual=$(kubectl --context kind-dva-course auth can-i get secrets -n dev --as=system:serviceaccount:stage:ticket-reader || true)
 test "$actual" = no
 echo 'Reader positive=yes; cross-namespace Secrets=no'
+kubectl --context kind-dva-course -n stage get pods --as=system:serviceaccount:stage:ticket-reader
+if kubectl --context kind-dva-course -n dev get pods --as=system:serviceaccount:stage:ticket-reader; then exit 1; fi
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=0
 kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s
 ./lab db-role create --namespace stage
+./lab db-role rotate --namespace stage
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=2
 kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=180s
 kubectl --context kind-dva-course -n stage exec postgres-0 -- psql -U postgres -d ticket_lab -v ON_ERROR_STOP=1 -c 'REVOKE INSERT ON TABLE tickets FROM ticket_runtime;'
@@ -106,6 +109,7 @@ curl -fsS http://127.0.0.1:18230/ready
 if ./lab http --base http://127.0.0.1:18230 --out evidence/insert-forbidden.json; then echo 'Forbidden INSERT succeeded'; exit 1; fi
 kubectl --context kind-dva-course -n stage exec postgres-0 -- psql -U postgres -d ticket_lab -v ON_ERROR_STOP=1 -c 'GRANT INSERT ON TABLE tickets TO ticket_runtime;'
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/permissions-returned.json
+if kubectl --context kind-dva-course -n stage exec postgres-0 -- psql -U postgres -d ticket_lab -v ON_ERROR_STOP=1 -c 'BEGIN; SET LOCAL ROLE ticket_runtime; DELETE FROM tickets WHERE false; ROLLBACK;'; then echo 'Forbidden DELETE allowed'; exit 1; fi
 
 echo '=== Prometheus rules, pending, firing and resolution ==='
 ./lab monitoring-admin
@@ -127,6 +131,7 @@ for attempt in $(seq 1 50); do
  sleep 2
 done
 test "$pending" = 1;test "$firing" = 1
+.venv-ui/bin/python qa/capture_ui.py alert
 kubectl --context kind-dva-course -n stage scale statefulset/postgres --replicas=1
 kubectl --context kind-dva-course -n stage rollout status statefulset/postgres --timeout=180s
 for attempt in $(seq 1 45); do
@@ -137,6 +142,9 @@ done
 ! jq -e '.data.alerts[] | select(.labels.alertname=="TicketReadinessLost" and .labels.namespace=="stage")' evidence/alerts-resolved.json >/dev/null
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/alert-return-http.json
 echo 'Alert verified: pending -> firing -> resolved; old data preserved'
+kubectl --context kind-dva-course -n monitoring port-forward service/grafana 13000:3000 > evidence/grafana-port.txt 2>&1 &
+sleep 3
+.venv-ui/bin/python qa/capture_ui.py dashboard
 
 echo '=== Backup, full SQL restore, HTTP comparison ==='
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=0

@@ -18,6 +18,8 @@ jobs:
           sudo apt-get install -y ansible jq unzip
           chmod +x lab scripts/*.sh
           ./lab tools
+          python -m venv .venv-ui
+          .venv-ui/bin/pip install playwright==1.55.0
       - name: Real positive and negative route
         run: bash qa/route.sh > course-route.log 2>&1
       - name: Failure details
