@@ -49,7 +49,7 @@ helm template ticket-api chart -f chart/values-stage.yaml > evidence/rendered-st
 kubectl --context kind-dva-course -n stage delete deployment ticket-api service ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n stage -f chart/values-stage.yaml --atomic --wait --timeout 180s
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-installed.json
-if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f chart/values-stage.yaml --set readinessPath=/not-ready --atomic --wait --timeout 45s; then echo 'Bad readiness accepted'; exit 1; fi
+if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f chart/values-stage.yaml --set probes.readinessPath=/not-ready --atomic --wait --timeout 45s; then echo 'Bad readiness accepted'; exit 1; fi
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-rollback.json
 helm --kube-context kind-dva-course -n stage history ticket-api
 echo '=== RBAC and minimal SQL permissions ==='
