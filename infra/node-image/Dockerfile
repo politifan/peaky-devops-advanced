@@ -1,7 +1,7 @@
 FROM ubuntu:24.04
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     openssh-server sudo python3 python3-apt ca-certificates procps \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/ssh/ssh_host_* \
     && useradd --create-home --shell /bin/bash lab \
     && passwd -d lab \
     && printf 'lab ALL=(ALL) NOPASSWD: ALL\n' > /etc/sudoers.d/lab \

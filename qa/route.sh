@@ -53,7 +53,7 @@ if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f char
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-rollback.json
 helm --kube-context kind-dva-course -n stage history ticket-api
 echo '=== RBAC and minimal SQL permissions ==='
-kubectl --context kind-dva-course apply -f security/reader.yaml
+kubectl --context kind-dva-course apply -f security/stage-reader.yaml
 kubectl --context kind-dva-course auth can-i get secrets --as system:serviceaccount:stage:ticket-runtime -n stage | grep '^no$'
 echo '=== Backup, full SQL restore, HTTP comparison ==='
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=0

@@ -1,0 +1,19 @@
+Peaky Minds • редакция 3 • модуль 1
+Два экземпляра, одна зависимость
+
+Все команды из корня ~/advanced-lab, кроме явно указанного cd.
+
+./lab foundation-start stage
+./lab foundation-start dev
+./lab observe --a http://127.0.0.1:18210 --b http://127.0.0.1:18211 --write-cycle --label stage --out evidence/module01.json
+cd foundation
+docker compose -p dva-stage --env-file env.stage ps
+docker compose -p dva-stage --env-file env.stage stop api_a
+curl -sS http://127.0.0.1:18211/ready
+docker compose -p dva-stage --env-file env.stage start api_a
+cd ..
+
+Перед остановкой создайте заявку и сохраните её id/title/status. Во время отказа A прочитайте её через B. Сравните dev и stage по проектам, сетям, томам и собственным маркерам. После возврата проверьте прежний ID. Новая запись сама по себе не доказывает сохранность старой.
+
+Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
+Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.

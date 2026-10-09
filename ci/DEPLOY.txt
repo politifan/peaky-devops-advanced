@@ -1,0 +1,12 @@
+Локальное продвижение проверенного CI-артефакта
+1. Рабочая копия — тот же commit, что проверен workflow. Не подменяйте его текущим HEAD после нового изменения.
+2. Выберите успешный run; gh run download RUN_ID -n checked-image -D evidence/ci
+3. Полный путь manifest: evidence/ci/evidence/manifest.json. Посмотрите commit, image_id и tar_sha256 через jq.
+4. Привязанный kind кластер уже создан, API ещё работает на подготовленной версии. Сохраните прежние заявки dev/stage.
+5. ./lab registry — создаёт локальный registry на 127.0.0.1:5001 только для вашего bound kind.
+6. ./lab deploy --artifact evidence/ci/evidence --commit COMMIT_ИЗ_MANIFEST
+Инструмент проверяет commit/checksum/image ID/architecture, переносит образ без пересборки, публикует его в локальный registry и получает реальный RepoDigest. Затем один digest проходит Helm и HTTP сначала dev, потом stage.
+Если API ещё управляется kubectl, предварительно перейдите к Helm в обоих namespaces по модулю 5; имя релиза ticket-api, БД/PVC остаются. Deploy не удаляет чужие или kubectl-owned объекты автоматически.
+Проверка HTTP после поставки создаёт новую заявку; сравнение прежних данных выполните отдельно с --read-id/--expected.
+Копирование артефакта и загрузка одного тега не означают совпадение registry digest. Только успешно полученный и использованный ref @sha256 фиксирует проверенное содержимое registry.
+Self-hosted runner не настроен этой инструкцией. Для его добавления нужны отдельные границы доверия, разрешения и политика недоверенных PR.

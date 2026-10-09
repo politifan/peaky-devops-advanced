@@ -1,15 +1,18 @@
-Доступ и ротация
-Peaky Minds • Материалы курса • Редакция 2
-Доступ и ротация
-Оператор использует admin kubeconfig только на своём стенде. Роль приложения в Kubernetes не получает token автоматически; API ходит к PostgreSQL, а не к Kubernetes API.
-./lab guardkubectl --context kind-dva-course apply -f security/reader.yamlkubectl --context kind-dva-course auth can-i get pods -n dev --as system:serviceaccount:dev:course-readerkubectl --context kind-dva-course auth can-i get pods -n stage --as system:serviceaccount:dev:course-readerkubectl --context kind-dva-course auth can-i get secrets -n dev --as system:serviceaccount:dev:course-readerkubectl --context kind-dva-course auth can-i patch deployments -n dev --as system:serviceaccount:dev:course-readerkubectl --context kind-dva-course -n dev get pods --as system:serviceaccount:dev:course-readerkubectl --context kind-dva-course -n stage get pods --as system:serviceaccount:dev:course-reader
-Ожидается yes/no/no/no; последняя операция должна дать Forbidden и ненулевой код. Администратор может impersonate этот SA: здесь проверка разрешений API, не отдельная учётная запись внешнего пользователя. Не создавать ClusterRoleBinding cluster-admin ради задания. Сохранить запрет вместе с разрешением.
-Secrets: выводить только names/types/metadata, не -o yaml, data или env. Base64 обратим. Vault шифрует файл с паролем; Kubernetes Secret в этом локальном kind не объявляется зашифрованным at rest. Администратор Docker/kubeconfig читает значения. .gitignore предотвращает обычный add, но не удаляет ранее закоммиченное; случайно опубликованный пароль нужно заменить и обработать историю отдельно.
-Минимальная роль PostgreSQL
-Для каждого ns сначала сохранить прежнюю заявку и её поля, остановить Locust/прочих писателей и CI-выпуски. Записать текущие desired replicas=2. Команды ниже для stage:
-kubectl --context kind-dva-course -n stage scale deployment/ticket-api --replicas=0kubectl --context kind-dva-course -n stage wait --for=delete pod -l app=ticket-api --timeout=120s./lab db-role create --namespace stagekubectl --context kind-dva-course -n stage scale deployment/ticket-api --replicas=2kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s./lab http --base http://127.0.0.1:18230 --read-id "$old_id" --expected .runtime/old-ticket.json --out evidence/m08-runtime.json
-create только один раз; существующая роль — разбирать состояние, дальше использовать rotate. Скрипт даёт ticket_runtime CONNECT, USAGE schema, SELECT/INSERT/UPDATE tickets и sequence usage; приложение не владеет схемой, не получает DELETE/DDL. ticket_app остаётся владельцем для migration Job через другой Secret.
-Ротация: та же остановка API, ./lab db-role rotate --namespace stage, затем вернуть 2 и повторить HTTP в новый out. Новый пароль генерируется внутри скрипта, не выводится. Замена env Secret сама не перезапускает старые Pods; явная остановка устраняет подключения со старым паролем. PostgreSQL и Kubernetes не образуют одну транзакцию: если обновление Secret после ALTER ROLE упало, сервис оставить остановленным, исправить причину, повторить rotate и затем поднять API. Не заявлять бесшовную ротацию: в этой работе есть окно обслуживания.
-Аудит фактических прав:
-kubectl --context kind-dva-course -n stage exec postgres-0 -- psql -U postgres -d ticket_lab -c "SELECT rolname,rolsuper FROM pg_roles WHERE rolname IN ('ticket_app','ticket_runtime');"kubectl --context kind-dva-course -n stage exec postgres-0 -- psql -U postgres -d ticket_lab -c "SELECT has_table_privilege('ticket_runtime','tickets','SELECT') AS can_read, has_table_privilege('ticket_runtime','tickets','INSERT') AS can_insert, has_table_privilege('ticket_runtime','tickets','UPDATE') AS can_update, has_table_privilege('ticket_runtime','tickets','DELETE') AS can_delete, has_schema_privilege('ticket_runtime','public','CREATE') AS can_ddl;"
-Ожидается runtime nonsuperuser, true/true/true/false/false. Дополнительно, в транзакции BEGIN; SET LOCAL ROLE ticket_runtime; DELETE FROM tickets WHERE false; ROLLBACK; должен быть permission denied: ни одной строки не удалять. Запустить psql ON_ERROR_STOP и отдельно ROLLBACK/закрытие сессии, сохранить ненулевой код. RBAC, ALTER ROLE.
+Peaky Minds • редакция 3 • модуль 8
+Проверить и разрешённое, и запрещённое
+
+Все команды из корня ~/advanced-lab, кроме явно указанного cd.
+
+kubectl --context kind-dva-course apply -f security/stage-reader.yaml
+kubectl --context kind-dva-course auth can-i get pods -n stage --as=system:serviceaccount:stage:ticket-reader
+kubectl --context kind-dva-course auth can-i get secrets -n dev --as=system:serviceaccount:stage:ticket-reader
+kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=0
+kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s
+./lab db-role create --namespace stage
+kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=2
+kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s
+
+Reader должен читать stage Pods и не читать Secrets/соседние dev Pods. Для create runtime-роли все API-writers предварительно остановлены; повторное create существующей роли не нужно. Для смены пароля используется ./lab db-role rotate --namespace stage, тоже при остановленных writers. После возврата проверяются старый GET и новый POST/PATCH. Runtime-роль не должна менять схему или удалять таблицу. Учебный Kubernetes Secret хранит base64, но это не шифрование. Vault рассматривается как отдельная архитектура; работающего Vault-сервера в обязательном комплекте нет.
+
+Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
+Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.

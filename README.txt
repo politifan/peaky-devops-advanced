@@ -1,15 +1,25 @@
-Peaky Minds — DevOps продвинутый, редакция 3, курс 301874.
-Готовое приложение и служебные инструменты выданы. Ученик пишет команды, HCL, YAML, SQL и запросы; разработка приложения не требуется.
-Основной путь: собственная учебная Linux amd64, Bash, Docker. Рекомендуем 16 ГБ RAM хоста/6 CPU/50 ГБ свободного места; стенд на 8 ГБ WSL проверяется автором отдельно. Ни namespaces, ни два контейнера одного хоста не доказывают физическую HA.
-Начните с базового курса https://stepik.org/course/301758 , если не умеете работать с Linux, Git, HTTP, Compose и восстановлением данных.
-Установка Docker/Compose — по https://docs.docker.com/engine/install/ubuntu/ . Проверка: docker version и docker compose version. Для учебных служебных инструментов нужен системный интерпретатор, входящий в Ubuntu; писать программы на нём не требуется.
-Системные утилиты: sudo apt-get update; sudo apt-get install curl jq unzip openssh-client ansible python3-venv
-Распакуйте в свою папку advanced-lab. chmod +x lab scripts/*.sh
+Peaky Minds: DevOps продвинутый — курс 301874, редакция 3.
+Готовое приложение и служебные CLI выданы; ученик работает с консолью, HCL/YAML, SQL, HTTP и сигналами. Разработка приложения не требуется.
+Основная среда: собственный Linux amd64, Bash, Docker Engine с Compose v2. Рекомендуем 16 ГБ RAM хоста и 50 ГБ диска. Изолированный GitHub-hosted Ubuntu 24.04 используется для авторской проверки. В WSL нужен исправный Docker/cgroups; лаборатория не доказана на каждом ноутбуке.
+Начните с базового курса https://stepik.org/course/301758 , если Linux, Git, curl и Compose пока незнакомы.
+Клонирование: git clone https://github.com/politifan/peaky-devops-advanced.git ~/advanced-lab
+cd ~/advanced-lab
+Установка Docker: https://docs.docker.com/engine/install/ubuntu/ либо https://docs.docker.com/engine/install/debian/
+Системные утилиты: sudo apt-get update && sudo apt-get install -y curl jq unzip openssh-client ansible python3-venv
+chmod +x lab scripts/*.sh
+docker version
+docker compose version
 ./lab tools
 export PATH="$PWD/.tools/bin:$PATH"
-Terraform/Ansible и Kubernetes имеют отдельные лабораторные инструкции в infra/RUNBOOK.txt, ansible/RUNBOOK.txt и k8s/RUNBOOK.txt. Перед изменениями сначала осмотр и проверка цели. Готовый первый Kubernetes-стенд: ./lab kube-start . Команды внутри него разобраны в уроках; не запускайте поверх чужого dva-course.
-Консольные команды всегда выполняются из корня этого каталога, если урок не указывает cd. Все доступные API слушают только loopback. Запускать API без авторизации на публичном сервере нельзя.
-Самопроверка: ./lab http --base http://127.0.0.1:18230 --out evidence/your-attempt.json
-Отчёт создаётся новым именем и не перезаписывает прежний. Он проверяет полезную операцию и известную старую запись по параметрам, но не начисляет баллы Stepik. External Grader не подключён.
-Секреты, private key, state/plan, дампы, kubeconfig не входят в Git. Учебные runtime-файлы создаются только локально. Перед портфолио проверяйте git status и выбранные файлы.
-Необязательные исходные RUNBOOK.txt сохраняют подробности старого авторского комплекта; обязательный обновлённый маршрут, пояснения и условия сдачи находятся в Stepik. При расхождении используйте обновлённые шаги и зафиксированную версию комплекта.
+Первый модуль: ./lab foundation-start stage; ./lab foundation-start dev
+Модуль 4: ./lab kube-start — только для первого создания собственного dva-course.
+Перед изменениями проверьте владельца, контекст и namespace. Все имена dva-* и учебные порты должны быть свободны. Не запускайте на чужом рабочем сервере.
+API доступен только на loopback. Приложение не содержит HTTP-авторизацию: не публикуйте его напрямую в интернет.
+Контракт: id целое, POST=201, GET/PATCH=200, пустой title=422, отсутствующая заявка=404. Старый ID нужно сохранить из своего ответа, а не копировать из вопроса.
+Все обязательные инструкции — RUNBOOK.txt по папкам и шаги Stepik. ci/DEPLOY.txt объясняет локальное продвижение проверенного артефакта; self-hosted runner не требуется.
+Готовые locks получены настоящим resolver на Linux/Python 3.12 и проверены CI. Изменение зависимостей требует повторной проверки; менять код приложения не надо.
+./lab http --base http://127.0.0.1:18230 --out evidence/new-attempt.json
+Отчёт не перезаписывает предыдущую попытку. Для старых данных добавьте --read-id ID --expected FILE. SQL-restore и HTTP-restore проверяются отдельно.
+Самопроверка не отправляет баллы в Stepik. External Grader не подключён.
+State, plan, runtime, private key, kubeconfig, секреты и дампы не входят в Git. Образ и открытые подтверждения связываются с commit; публикация evidence требует очистки.
+Полигон односерверный: два экземпляра не доказывают физическую HA. Vault и metrics-server — дополнительные варианты, не готовые сервисы обязательного комплекта.

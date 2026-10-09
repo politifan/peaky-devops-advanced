@@ -10,8 +10,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     APP_VERSION=${APP_VERSION}
 WORKDIR /app
-COPY requirements.txt ./
-RUN python -m pip install --no-cache-dir -r requirements.txt \
+COPY requirements.lock ./
+RUN python -m pip install --no-cache-dir --require-hashes -r requirements.lock \
     && groupadd --gid 10001 app \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin app
 COPY app/ ./app/

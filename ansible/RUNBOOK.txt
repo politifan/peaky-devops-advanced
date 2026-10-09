@@ -1,14 +1,20 @@
-Ansible  два SSH окружения
-Peaky Minds • Материалы курса • Редакция 2
-Ansible  два SSH-окружения
-После Terraform оба контейнера работают, ключ только в .runtime. Здесь нет systemd: nginx запускается командой, состояние процесса наблюдается через pgrep. Это осознанный учебный маршрут, не пример service-модуля для VM.
-python3 -m venv .venv-ansible.venv-ansible/bin/pip install -r ansible/requirements.txtdocker exec dva-node-a ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pubdocker exec dva-node-b ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pubssh-keyscan -t ed25519 -p 22220 127.0.0.1 > .runtime/scan-assh-keyscan -t ed25519 -p 22221 127.0.0.1 > .runtime/scan-bssh-keygen -lf .runtime/scan-assh-keygen -lf .runtime/scan-b
-Вручную сравнить fingerprints по каждому порту с полученными непосредственно из своих контейнеров. Только совпавшие строки объединить в .runtime/known_hosts. Keyscan сам по себе не удостоверяет узел. При замене контейнера ключ может измениться: проверить новый fingerprint, затем заменить только соответствующую запись, не выключать host key checking.
-Скопировать ansible/inventory.example.ini в .runtime/inventory.ini. Заменить ABSOLUTE_PATH на абсолютный путь к корню своего checkout во всех полях private_key_file/known_hosts; сверить порты из terraform output. Рабочий каталог остаётся корнем:
-export ANSIBLE_CONFIG="$PWD/ansible/ansible.cfg".venv-ansible/bin/ansible training -m ansible.builtin.ping.venv-ansible/bin/ansible-playbook ansible/playbook.yml --check --diff.venv-ansible/bin/ansible-playbook ansible/playbook.yml.venv-ansible/bin/ansible-playbook ansible/playbook.ymlcurl --fail http://127.0.0.1:22280/healthcurl --fail http://127.0.0.1:22281/health
-Check mode на ещё не установленном nginx может остановиться на nginx -t: это предварительный прогноз, не обещание успешного применения. Фактический первый запуск обязателен. При неизменной конфигурации и свежем apt cache второй должен дать changed=0, failed=0, unreachable=0. Записать действительные recap обоих узлов. Обновление apt cache после суток — объяснимое изменение, а не вечная гарантия changed=0.
-Изменить lab_message на безопасный configured-v2, прогнать оба узла, увидеть handler Reload nginx и новый HTTP ответ. Самостоятельно добавить копию config с ошибкой директивы: nginx -t должен остановить reload. Сохранить прежний доступный ответ, вернуть корректный файл, повторить. До запуска шаблона использовать только буквы, цифры, дефис/underscore в lab_message.
-Остановить собственный dva-node-b, выполнить playbook, сохранить код и recap с unreachable. Не считать успех node_a успехом группы. Запустить b, повторить --limit node_b, затем весь playbook. HTTP обоих узлов должен подтвердить восстановление.
-Секрет отдельным заданием
-.venv-ansible/bin/ansible-vault create .runtime/vault.yml
-В редакторе создать training_token: <собственное случайное значение>; пароль Vault вводить интерактивно, не записывать в Git/командную строку. Запустить .venv-ansible/bin/ansible-playbook ansible/secret.yml --ask-vault-pass. no_log и diff=false подавляют значение в отчёте, но не защищают root на узле от чтения файла. Подтвердить лишь владельца root и режим 0600 у /etc/dva/token, повторный changed=0; значение не показывать. Handlers.
+Peaky Minds • редакция 3 • модуль 3
+Настроить два узла и повторить без изменений
+
+Все команды из корня ~/advanced-lab, кроме явно указанного cd.
+
+sed "s|/ABSOLUTE/PATH/advanced-lab|$PWD|g" ansible/inventory.example.ini > ansible/inventory.ini
+docker exec dva-node-a ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+docker exec dva-node-b ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
+ssh-keyscan -t ed25519 -p 22220 127.0.0.1 >> .runtime/known_hosts
+ssh-keyscan -t ed25519 -p 22221 127.0.0.1 >> .runtime/known_hosts
+ssh-keygen -lf .runtime/known_hosts
+ansible -i ansible/inventory.ini training -m ansible.builtin.ping
+ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+curl -fsS http://127.0.0.1:22280/health
+ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
+
+Сначала сравните fingerprint каждого сетевого ключа с доверенным наблюдением через собственный Docker-контейнер; только после совпадения подключайтесь Ansible. Не отключайте StrictHostKeyChecking. Inventory содержит пути только вашей Linux-папки. Успешный повтор должен иметь changed=0 и failed=0, а HTTP — ожидаемый marker. Для отрицательной проверки передайте lab_message=bad!: выданный assert должен остановить некорректное значение до изменения конфигурации.
+
+Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
+Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.

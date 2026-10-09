@@ -1,14 +1,17 @@
-Helm  один API chart  два релиза
-Peaky Minds • Материалы курса • Редакция 2
-Helm  один API chart, два релиза
-Сначала завершить Kubernetes. DB/PVC/Secrets/ServiceAccount остаются внешними по отношению к chart. В каждом namespace возможен ровно один ticket-api с этим chart: имена фиксированы.
-./lab guardhelm lint chart -f chart/values-dev.yamlhelm template ticket-dev chart -n dev -f chart/values-dev.yaml > evidence/helm-dev.yamlhelm template ticket-stage chart -n stage -f chart/values-stage.yaml > evidence/helm-stage.yamldiff -u evidence/helm-dev.yaml evidence/helm-stage.yamlkubectl --context kind-dva-course -n dev apply --dry-run=server -f evidence/helm-dev.yaml
-diff с кодом 1 означает различия; ожидаются release/namespace/nodePort, не другой image. Render не проверяет успешность hook миграции. Dry-run может показать конфликт с существующими объектами; сохранить его и отличить от YAML ошибки.
-Для передачи владения удалить только raw Deployment ticket-api и Service ticket-api в dev/stage после сохранения старой заявки и их манифестов. Это краткий учебный перерыв. Не удалять namespace, DB, PVC, Secrets или ticket-runtime SA. Helm не принимает чужие объекты только потому, что имена совпали.
-kubectl --context kind-dva-course -n dev delete deployment ticket-apikubectl --context kind-dva-course -n dev delete service ticket-apihelm upgrade --install ticket-dev chart --kube-context kind-dva-course -n dev -f chart/values-dev.yaml --wait --atomic --timeout 180shelm test ticket-dev --kube-context kind-dva-course -n dev --timeout 60s
-Повторить для stage: ticket-stage, values-stage. Hook pre-install/pre-upgrade применяет Alembic; он требует существующих БД/secret и завершения bootstrap. Приложение не запускает миграцию само. Hook test создаёт синтетическую заявку; данные продолжают принадлежать PostgreSQL.
-Сохранить history и текущую исправную revision. Выполнить конфигурационный upgrade с --set-string releaseLabel=m05-v2; image тот же. Проверить rollout, /health.version, imageID и старую заявку. releaseLabel — метка конфигурации, не доказательство новой сборки.
-Провести плохой upgrade:
-helm upgrade ticket-stage chart --kube-context kind-dva-course -n stage -f chart/values-stage.yaml --set probes.readinessPath=/missing --wait --atomic --timeout 90s
-Команда должна отказать; сохранить код, events/history и проверить фактическое состояние после автоматического отката. Не обещать, что SQL откатился. Для ручного восстановления использовать helm rollback ticket-stage <ранее записанная исправная revision> --kube-context kind-dva-course -n stage --wait --timeout 180s, затем HTTP старых/новых данных. values.schema.json отвергает неизвестные корневые поля: readinessPath без probes — опечатка, не изменение probe.
-Rollback возвращает шаблон API; уже выполненные миграции/внешняя DB не откатываются. В упражнении схема одинакова. Для несовместимой схемы сначала проектируют expand-contract: добавить совместимое поле, перевести обе версии, убрать старое в отдельном выпуске. Произвольный alembic downgrade после потери поля не восстанавливает потерянные значения. Hooks.
+Peaky Minds • редакция 3 • модуль 5
+Отдать управление API Helm, сохранив БД
+
+Все команды из корня ~/advanced-lab, кроме явно указанного cd.
+
+helm lint chart
+helm template ticket-api chart -n stage -f chart/values-stage.yaml > evidence/rendered-stage.yaml
+kubectl --context kind-dva-course -n stage get deployment ticket-api service ticket-api
+kubectl --context kind-dva-course -n stage delete deployment ticket-api service ticket-api
+helm --kube-context kind-dva-course upgrade --install ticket-api chart -n stage -f chart/values-stage.yaml --atomic --wait --timeout 180s
+helm --kube-context kind-dva-course -n stage history ticket-api
+./lab http --base http://127.0.0.1:18230 --out evidence/helm-stage.json
+
+Переход от kubectl к Helm выполняется один раз в своей учебной stage: сохраните прежний ID, проверьте render и удалите только два перечисленных API-объекта. Это краткая учебная пауза, а не миграция без простоя. ServiceAccount ticket-runtime, БД, Jobs и PVC остаются. Не применяйте delete --all. Иначе Helm встретит конфликт ownership. После установки сравните прежнюю запись. Затем испытайте неверный probes.readinessPath=/not-ready с --atomic --wait --timeout 45s: ожидается ненулевой код, возврат прежней версии и прежние данные. Rollback приложения не откатывает SQL-схему.
+
+Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
+Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.
