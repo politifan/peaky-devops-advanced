@@ -49,19 +49,19 @@ helm template ticket-api chart -f chart/values-stage.yaml > evidence/rendered-st
 kubectl --context kind-dva-course -n stage delete deployment ticket-api service ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n stage -f chart/values-stage.yaml --atomic --wait --timeout 180s
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-installed.json
-if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f chart/values-stage.yaml --set probes.readinessPath=/not-ready --atomic --wait --timeout 45s; then echo 'Bad readiness accepted'; exit 1; fi
+if helm --kube-context kind-dva-course upgrade ticket-api chart -n stage -f chart/values-stage.yaml --set readinessPath=/not-ready --atomic --wait --timeout 45s; then echo 'Bad readiness accepted'; exit 1; fi
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/helm-rollback.json
 helm --kube-context kind-dva-course -n stage history ticket-api
 echo '=== RBAC and minimal SQL permissions ==='
-kubectl --context kind-dva-course apply -f security/rbac.yaml
+kubectl --context kind-dva-course apply -f security/reader.yaml
 kubectl --context kind-dva-course auth can-i get secrets --as system:serviceaccount:stage:ticket-runtime -n stage | grep '^no$'
 echo '=== Backup, full SQL restore, HTTP comparison ==='
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=0
 kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s
 ./lab backup --namespace stage --other-writers-stopped
 backup=$(find backups -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
-./lab restore "$backup" --destination restore-202610090001
-kubectl --context kind-dva-course -n restore-202610090001 port-forward service/ticket-api 18400:8000 > evidence/port-forward.txt 2>&1 &
+./lab restore "$backup" --destination restore-20261009000100
+kubectl --context kind-dva-course -n restore-20261009000100 port-forward service/ticket-api 18400:8000 > evidence/port-forward.txt 2>&1 &
 sleep 3
 ./lab http --base http://127.0.0.1:18400 --read-id "$old" --expected evidence/old-kube.json --out evidence/restored-http.json
 kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=2
