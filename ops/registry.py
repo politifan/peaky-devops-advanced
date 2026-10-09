@@ -11,6 +11,10 @@ def inspect(kind, name):
 
 def main():
     guard()
+    node = run('kind', 'get', 'nodes', '--name', 'dva-course', capture_output=True, text=True).stdout.split()[0]
+    config = run('docker', 'exec', node, 'containerd', 'config', 'dump', capture_output=True, text=True).stdout
+    if 'config_path = "/etc/containerd/certs.d"' not in config:
+        raise RuntimeError('The course node lacks the certs.d registry path. Use the current k8s/kind.yaml for a NEW own training cluster; do not delete a cluster containing needed data.')
     volume = inspect('volume', 'dva-registry-data')
     if volume and (volume.get('Labels') or {}).get('course') != 'dva':
         raise RuntimeError('Registry volume is not owned by this course')
@@ -32,7 +36,6 @@ def main():
     info = inspect('container', 'dva-registry')
     if 'kind' not in info['NetworkSettings']['Networks']:
         run('docker', 'network', 'connect', 'kind', 'dva-registry')
-    node = run('kind', 'get', 'nodes', '--name', 'dva-course', capture_output=True, text=True).stdout.split()[0]
     directory = '/etc/containerd/certs.d/localhost:5001'
     run('docker', 'exec', node, 'mkdir', '-p', directory)
     value = '[host."http://dva-registry:5000"]\n  capabilities = ["pull", "resolve"]\n'
