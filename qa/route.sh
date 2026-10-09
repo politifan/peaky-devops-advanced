@@ -54,11 +54,7 @@ terraform -chdir=infra plan -no-color -var-file=local.tfvars -out=../.runtime/po
 terraform -chdir=infra apply -no-color ../.runtime/port-return.tfplan
 
 sed "s|/ABSOLUTE/PATH/advanced-lab|$PWD|g" ansible/inventory.example.ini > ansible/inventory.ini
-for port in 22220 22221; do
-  ssh-keyscan -t ed25519 -p "$port" 127.0.0.1 >> .runtime/known_hosts
-done
-docker exec dva-node-a ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-ssh-keygen -lf .runtime/known_hosts
+./lab ssh-trust
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml | tee evidence/ansible-first.txt
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml | tee evidence/ansible-repeat.txt
 grep -E 'node_a.*changed=0.*failed=0' evidence/ansible-repeat.txt

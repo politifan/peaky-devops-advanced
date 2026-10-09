@@ -20,6 +20,7 @@ case "$task" in
   kube-start) exec bash scripts/kube-start.sh;;
   analyze) exec python3 load/analyze.py "$@";;
   load) exec bash scripts/load.sh "$@";;
+  ssh-trust) exec bash scripts/ssh-trust.sh;;
   inspect) docker version --format '{{.Server.Version}}'; kind version; kubectl version --client; helm version --short; terraform version; ansible --version | head -1;;
   *) printf '%s\n' 'lab tools | inspect | guard [--bind] | kube-start | http --base URL --out FILE | secrets dev|stage | backup | restore | db-role | monitoring-admin | load | registry | deploy | build-check';;
 esac
