@@ -1,0 +1,53 @@
+- name: Configure two training Linux containers
+  hosts: training
+  become: true
+  vars:
+    lab_message: "configured-by-ansible"
+  tasks:
+    - name: Validate the demonstration message before templating
+      ansible.builtin.assert:
+        that: lab_message is match('^[A-Za-z0-9_-]+$')
+        fail_msg: Use letters, digits, underscores or hyphens in lab_message
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 86400
+    - name: Create persistent course directory
+      ansible.builtin.file:
+        path: /srv/dva
+        state: directory
+        owner: lab
+        group: lab
+        mode: '0750'
+    - name: Write a marker without shell redirection
+      ansible.builtin.copy:
+        dest: /srv/dva/configured.txt
+        content: "{{ inventory_hostname }} {{ lab_message }}\n"
+        owner: lab
+        group: lab
+        mode: '0640'
+    - name: Write nginx configuration
+      ansible.builtin.template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/conf.d/dva.conf
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Reload nginx
+    - name: Validate complete configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+    - name: Inspect nginx process in a container without systemd
+      ansible.builtin.command: pgrep -x nginx
+      register: nginx_process
+      changed_when: false
+      failed_when: nginx_process.rc not in [0, 1]
+      check_mode: false
+    - name: Start nginx if absent
+      ansible.builtin.command: nginx
+      when: nginx_process.rc == 1
+  handlers:
+    - name: Reload nginx
+      ansible.builtin.command: nginx -s reload

@@ -1,0 +1,273 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "Namespace",
+      "metadata": {
+        "name": "monitoring",
+        "labels": {
+          "course": "dva"
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ServiceAccount",
+      "metadata": {
+        "name": "prometheus",
+        "namespace": "monitoring"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "prometheus-config",
+        "namespace": "monitoring"
+      },
+      "data": {
+        "prometheus.yml": "\nglobal:\n  scrape_interval: 5s\n  evaluation_interval: 5s\nrule_files: [/etc/prometheus/rules.yml]\nscrape_configs:\n  - job_name: ticket-pods\n    kubernetes_sd_configs:\n      - role: pod\n        namespaces: {names: [dev, stage]}\n    relabel_configs:\n      - source_labels: [__meta_kubernetes_pod_label_app]\n        action: keep\n        regex: ticket-api\n      - source_labels: [__meta_kubernetes_pod_container_port_name]\n        action: keep\n        regex: http\n      - source_labels: [__meta_kubernetes_namespace]\n        target_label: namespace\n      - source_labels: [__meta_kubernetes_pod_name]\n        target_label: pod\n",
+        "rules.yml": "\ngroups:\n  - name: ticket-lab\n    rules:\n      - alert: TicketReadinessLost\n        expr: sum by (namespace) (ticket_ready) == 0\n        for: 30s\n        labels: {severity: training}\n        annotations:\n          summary: All observed API instances have failed readiness\n      - alert: TicketTargetsMissingStage\n        expr: absent(up{job=\"ticket-pods\",namespace=\"stage\"})\n        for: 30s\n        labels: {severity: training}\n        annotations:\n          summary: No stage API scrape targets are observed\n      - alert: TicketScrapeFailed\n        expr: up{job=\"ticket-pods\"} == 0\n        for: 30s\n        labels: {severity: training}\n        annotations:\n          summary: Metrics endpoint is not being scraped successfully\n      - alert: TicketHigh5xx\n        expr: (sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m])) / sum by (namespace) (rate(ticket_http_requests_total[1m])) > 0.05) and (sum by (namespace) (rate(ticket_http_requests_total[1m])) > 0)\n        for: 30s\n        labels: {severity: training}\n        annotations:\n          summary: Observed server HTTP errors exceed the training threshold\n"
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "prometheus",
+        "namespace": "monitoring"
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "prometheus"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "prometheus"
+            }
+          },
+          "spec": {
+            "serviceAccountName": "prometheus",
+            "securityContext": {
+              "fsGroup": 65534
+            },
+            "containers": [
+              {
+                "name": "prometheus",
+                "image": "prom/prometheus:v3.5.0",
+                "args": [
+                  "--config.file=/etc/prometheus/prometheus.yml",
+                  "--storage.tsdb.path=/prometheus",
+                  "--storage.tsdb.retention.time=1d"
+                ],
+                "ports": [
+                  {
+                    "containerPort": 9090
+                  }
+                ],
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "512Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "config",
+                    "mountPath": "/etc/prometheus"
+                  },
+                  {
+                    "name": "data",
+                    "mountPath": "/prometheus"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "config",
+                "configMap": {
+                  "name": "prometheus-config"
+                }
+              },
+              {
+                "name": "data",
+                "emptyDir": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "prometheus",
+        "namespace": "monitoring"
+      },
+      "spec": {
+        "selector": {
+          "app": "prometheus"
+        },
+        "ports": [
+          {
+            "port": 9090,
+            "targetPort": 9090
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "grafana-provision",
+        "namespace": "monitoring"
+      },
+      "data": {
+        "datasources.yaml": "apiVersion: 1\ndatasources:\n  - name: Prometheus\n    type: prometheus\n    uid: dva-prom\n    access: proxy\n    url: http://prometheus:9090\n    isDefault: true\n",
+        "dashboards.yaml": "apiVersion: 1\nproviders:\n  - name: training\n    type: file\n    options:\n      path: /var/lib/grafana/dashboards\n"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "grafana-dashboard",
+        "namespace": "monitoring"
+      },
+      "data": {
+        "ticket.json": "{\"title\": \"Ticket Lab operations\", \"uid\": \"dva-ticket\", \"schemaVersion\": 39, \"version\": 1, \"refresh\": \"5s\", \"time\": {\"from\": \"now-15m\", \"to\": \"now\"}, \"panels\": [{\"id\": 1, \"title\": \"Requests per second\", \"type\": \"timeseries\", \"gridPos\": {\"x\": 0, \"y\": 0, \"w\": 12, \"h\": 9}, \"datasource\": {\"type\": \"prometheus\", \"uid\": \"dva-prom\"}, \"targets\": [{\"refId\": \"A\", \"expr\": \"sum by (namespace) (rate(ticket_http_requests_total[1m]))\", \"legendFormat\": \"{{namespace}}\"}], \"fieldConfig\": {\"defaults\": {\"unit\": \"reqps\"}, \"overrides\": []}}, {\"id\": 2, \"title\": \"Observed 5xx ratio\", \"type\": \"timeseries\", \"gridPos\": {\"x\": 12, \"y\": 0, \"w\": 12, \"h\": 9}, \"datasource\": {\"type\": \"prometheus\", \"uid\": \"dva-prom\"}, \"targets\": [{\"refId\": \"A\", \"expr\": \"sum by (namespace) (rate(ticket_http_requests_total{status=~\\\"5..\\\"}[1m])) / sum by (namespace) (rate(ticket_http_requests_total[1m]))\", \"legendFormat\": \"{{namespace}}\"}], \"fieldConfig\": {\"defaults\": {\"unit\": \"percentunit\"}, \"overrides\": []}}, {\"id\": 3, \"title\": \"Successful server latency p95\", \"type\": \"timeseries\", \"gridPos\": {\"x\": 0, \"y\": 9, \"w\": 12, \"h\": 9}, \"datasource\": {\"type\": \"prometheus\", \"uid\": \"dva-prom\"}, \"targets\": [{\"refId\": \"A\", \"expr\": \"histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\\\"2..\\\"}[1m])))\", \"legendFormat\": \"{{namespace}}\"}], \"fieldConfig\": {\"defaults\": {\"unit\": \"s\"}, \"overrides\": []}}, {\"id\": 4, \"title\": \"Ready observed instances\", \"type\": \"timeseries\", \"gridPos\": {\"x\": 12, \"y\": 9, \"w\": 12, \"h\": 9}, \"datasource\": {\"type\": \"prometheus\", \"uid\": \"dva-prom\"}, \"targets\": [{\"refId\": \"A\", \"expr\": \"sum by (namespace) (ticket_ready)\", \"legendFormat\": \"{{namespace}}\"}], \"fieldConfig\": {\"defaults\": {\"unit\": \"short\"}, \"overrides\": []}}]}"
+      }
+    },
+    {
+      "apiVersion": "apps/v1",
+      "kind": "Deployment",
+      "metadata": {
+        "name": "grafana",
+        "namespace": "monitoring"
+      },
+      "spec": {
+        "replicas": 1,
+        "selector": {
+          "matchLabels": {
+            "app": "grafana"
+          }
+        },
+        "template": {
+          "metadata": {
+            "labels": {
+              "app": "grafana"
+            }
+          },
+          "spec": {
+            "automountServiceAccountToken": false,
+            "securityContext": {
+              "fsGroup": 472
+            },
+            "containers": [
+              {
+                "name": "grafana",
+                "image": "grafana/grafana:12.1.0",
+                "ports": [
+                  {
+                    "containerPort": 3000
+                  }
+                ],
+                "env": [
+                  {
+                    "name": "GF_SECURITY_ADMIN_PASSWORD",
+                    "valueFrom": {
+                      "secretKeyRef": {
+                        "name": "grafana-admin",
+                        "key": "password"
+                      }
+                    }
+                  }
+                ],
+                "resources": {
+                  "requests": {
+                    "cpu": "100m",
+                    "memory": "128Mi"
+                  },
+                  "limits": {
+                    "cpu": "500m",
+                    "memory": "512Mi"
+                  }
+                },
+                "volumeMounts": [
+                  {
+                    "name": "provision",
+                    "mountPath": "/etc/grafana/provisioning/datasources/dva.yaml",
+                    "subPath": "datasources.yaml"
+                  },
+                  {
+                    "name": "provision",
+                    "mountPath": "/etc/grafana/provisioning/dashboards/dva.yaml",
+                    "subPath": "dashboards.yaml"
+                  },
+                  {
+                    "name": "dashboard",
+                    "mountPath": "/var/lib/grafana/dashboards"
+                  },
+                  {
+                    "name": "data",
+                    "mountPath": "/var/lib/grafana"
+                  }
+                ]
+              }
+            ],
+            "volumes": [
+              {
+                "name": "provision",
+                "configMap": {
+                  "name": "grafana-provision"
+                }
+              },
+              {
+                "name": "dashboard",
+                "configMap": {
+                  "name": "grafana-dashboard"
+                }
+              },
+              {
+                "name": "data",
+                "emptyDir": {}
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "Service",
+      "metadata": {
+        "name": "grafana",
+        "namespace": "monitoring"
+      },
+      "spec": {
+        "selector": {
+          "app": "grafana"
+        },
+        "ports": [
+          {
+            "port": 3000,
+            "targetPort": 3000
+          }
+        ]
+      }
+    }
+  ]
+}

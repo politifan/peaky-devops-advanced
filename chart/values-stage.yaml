@@ -1,0 +1,3 @@
+service:
+  nodePort: 30230
+releaseLabel: stage-m05-v1

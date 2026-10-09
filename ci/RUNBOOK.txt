@@ -1,0 +1,22 @@
+CI CD  проверенная поставка
+Peaky Minds • Материалы курса • Редакция 2
+CI/CD  проверенная поставка
+Предусловия: исправные Helm релизы, обе DB, X64 учебная Ubuntu с Docker/kind/kubectl/Helm/Python, собственный приватный GitHub repository. Workflow запускается вручную только для доверенной main. Это отдельная работа ученика; в текущем комплекте workflow не исполнен.
+1. Locks на Linux Python 3.12
+python3 -m venv .venv-lock.venv-lock/bin/pip install pip-tools==7.5.1cd ticket-lab../.venv-lock/bin/pip-compile --generate-hashes --output-file requirements.lock requirements.txt../.venv-lock/bin/pip-compile --generate-hashes --output-file requirements-dev.lock requirements-dev.txtcd ..git add ticket-lab/requirements.lock ticket-lab/requirements-dev.lockgit commit -m 'Lock runtime and verification dependencies'
+Проверить install --require-hashes, pip check и pytest в свежем venv. Зафиксированные прямые версии должны разрешиться вместе. Если resolver отказал, сохранить конфликт, согласованно исправить requirements, пересоздать locks и повторить; не удалять hashes ради зелёного результата. Python platform/architecture записать. requirements-dev.lock может содержать весь runtime — это намеренное полное окружение проверок, runtime образ устанавливает только runtime lock.
+2. Registry
+./lab registry проверит привязанный kind, создаст собственный registry:3 на 127.0.0.1:5001 с отдельным помеченным томом, подключит к kind network и настроит hosts.toml внутри учебного kind узла. Это HTTP только локального стенда, не образец публичного registry. Скрипт не меняет Docker daemon конфигурацию хоста. При конфликте имени/порта остановиться.
+3. Runner
+В GitHub Settings → Actions → Runners → New self-hosted runner выбрать Linux X64; выполнить актуальные команды загрузки, checksum, регистрации, показанные самим GitHub. Registration token кратковременный, в сдачу не включать. Runner запускается тем же обычным пользователем учебной Ubuntu, у которого есть доступ к этому Docker и kubeconfig, labels Linux/X64/dva-course. Не root и не общий рабочий сервер. Его Docker-доступ всё равно эквивалентен управлению учебным хостом.
+Скопировать проверенную .runtime/cluster-id.json вне runner checkout, например ~/.local/share/dva-course/cluster-id.json, mode600. В окружении процесса запуска runner задать DVA_CLUSTER_BINDING абсолютным путём к этому файлу. Обычный checkout очистит рабочую папку и не должен терять единственную копию привязки. Установить runner, удовлетворяющий требованиям закреплённых Actions; версии installer взять из GitHub UI. При запуске Actions на Node24 устаревший runner надо обновить по официальной инструкции.
+4. Поставка
+Файлы .github/workflows/advanced.yml, ci/* и все исходники находятся в корне repository. Отправить доверенные изменения в main и вызвать workflow_dispatch. Build:
+проверяет commit, hashed locks, pytest;
+собирает образ, проверяет Alembic и полезную HTTP-операцию с отдельным PostgreSQL;
+сохраняет image.tar, SHA256 архива, imageID, архитектуру, commit, JUnit/HTTP отчёты.
+Deploy зависит от build; сверяет commit и SHA256, загружает тот же образ, проверяет imageID/architecture, публикует и получает registry digest. Именно этот digest идёт сначала в dev, после Helm test и HTTP — в stage. Второй docker build в deploy запрещён контрактом, иначе проверен другой кандидат.
+Сохранить ссылку run, manifest/deployed-image и оба отчёта. Посмотреть actual container imageID, не только spec.image. Артефакты хранятся 3 дня: копии доказательств сохраняет ученик. Manifest связывает объекты, но не является криптографической attestations системой: доверие к runner/repository сохраняется.
+5. Отрицательная проверка
+В собственном учебном repository временно испортить assertion в Python-тесте, commit в main и вызвать workflow. Build красный, deploy skipped; digest stage остаётся прежним. Вернуть тест корректирующим commit, повторить весь выпуск. Сбой post-deploy HTTP после успешного Helm rollout останавливает stage, но автоматически не откатывает dev: сохранить журналы, выбрать совместимую revision из Helm history, rollback и HTTP. --atomic действует на провал самой Helm команды; не распространяется на будущие внешние проверки.
+Не включать pull_request для недоверенного кода на этом runner: workflow исполняет команды с доступом к Docker/kubeconfig. contents:read не отнимает локальные права процесса. Безопасность Actions.

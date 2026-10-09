@@ -1,0 +1,22 @@
+apiVersion: batch/v1
+kind: Job
+metadata: {name: init-db-m04}
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 120
+  template:
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: init
+          image: dva-ticket:advanced-m04
+          imagePullPolicy: IfNotPresent
+          command: [python, ops/init_db.py]
+          env:
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: dva-db-admin, key: password}
+            - name: APP_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: dva-migrate-db, key: password}

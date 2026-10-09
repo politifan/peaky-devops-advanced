@@ -1,0 +1,57 @@
+# Select a project explicitly: -p dva-dev / -p dva-stage.
+# Do not add a shared volume name or container_name.
+x-application: &application
+  image: ${TICKET_IMAGE:?set TICKET_IMAGE in env.dev or env.stage}
+  env_file: .runtime/${LAB_ENV:?set LAB_ENV}.app.env
+  restart: "no"
+  depends_on:
+    db:
+      condition: service_healthy
+
+x-api: &api
+  <<: *application
+  healthcheck:
+    test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=8).read()"]
+    interval: 10s
+    timeout: 10s
+    retries: 3
+    start_period: 15s
+
+services:
+  db:
+    image: postgres:16-bookworm
+    env_file: .runtime/${LAB_ENV:?set LAB_ENV}.db.env
+    restart: "no"
+    networks:
+      default:
+        aliases: [postgres]
+    stop_grace_period: 30s
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 10s
+  api_a:
+    <<: *api
+    ports:
+      - "127.0.0.1:${API_A_PORT:?set API_A_PORT}:8000"
+  api_b:
+    <<: *api
+    ports:
+      - "127.0.0.1:${API_B_PORT:?set API_B_PORT}:8000"
+  migrate:
+    <<: *application
+    profiles: ["tools"]
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+
+  init:
+    image: ${TICKET_IMAGE}
+    env_file: .runtime/${LAB_ENV}.init.env
+    command: [python, ops/init_db.py]
+    profiles: [tools]
+
+volumes:
+  dbdata:

@@ -1,0 +1,40 @@
+name: Advanced DevOps checked release
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: dva-checked-image
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Prepare locks if author bootstrap is needed
+        run: |
+          if [ ! -f ticket-lab/requirements-dev.lock ]; then
+            pip install pip-tools==7.5.1
+            cd ticket-lab
+            pip-compile --generate-hashes -o requirements.lock requirements.txt
+            pip-compile --generate-hashes -o requirements-dev.lock requirements-dev.txt
+          fi
+      - name: Test supplied service, PostgreSQL migration, HTTP and image
+        run: bash scripts/build-check.sh > checked-image.log 2>&1
+      - name: Failure details
+        if: failure()
+        run: tail -n 80 checked-image.log || true
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: checked-image
+          path: |
+            evidence/
+            checked-image.log
+            ticket-lab/*.lock
+          if-no-files-found: error
+          retention-days: 7

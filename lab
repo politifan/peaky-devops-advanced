@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")"
+export PATH="$PWD/.tools/bin:$PATH"
+task=${1:-help}; shift || true
+case "$task" in
+  foundation-start) exec bash scripts/foundation-start.sh "$@";;
+  observe) exec python3 foundation/observe.py "$@";;
+  guard) exec python3 ops/guard.py "$@";;
+  secrets) exec python3 ops/prepare_secrets.py "$@";;
+  http) exec python3 ops/http_check.py "$@";;
+  backup) exec python3 recovery/backup.py "$@";;
+  restore) exec python3 recovery/restore.py "$@";;
+  db-role) exec python3 security/runtime_role.py "$@";;
+  monitoring-admin) exec python3 monitoring/prepare_admin.py "$@";;
+  registry) exec python3 ops/registry.py "$@";;
+  deploy) exec python3 ci/deploy.py "$@";;
+  build-check) exec bash scripts/build-check.sh "$@";;
+  tools) exec bash scripts/tools.sh;;
+  kube-start) exec bash scripts/kube-start.sh;;
+  analyze) exec python3 load/analyze.py "$@";;
+  load) exec bash scripts/load.sh "$@";;
+  inspect) docker version --format '{{.Server.Version}}'; kind version; kubectl version --client; helm version --short; terraform version; ansible --version | head -1;;
+  *) printf '%s\n' 'lab tools | inspect | guard [--bind] | kube-start | http --base URL --out FILE | secrets dev|stage | backup | restore | db-role | monitoring-admin | load | registry | deploy | build-check';;
+esac

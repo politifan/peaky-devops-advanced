@@ -1,0 +1,14 @@
+replicaCount: 2
+image:
+  ref: dva-ticket:advanced-m04
+  pullPolicy: IfNotPresent
+releaseLabel: m05-v1
+service:
+  nodePort: 30220
+probes:
+  readinessPath: /ready
+resources:
+  requests: {cpu: 100m, memory: 128Mi}
+  limits: {cpu: 500m, memory: 512Mi}
+databaseSecret: dva-app-db
+migrationSecret: dva-migrate-db

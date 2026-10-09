@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object", "additionalProperties": false,
+  "required": ["replicaCount", "image", "releaseLabel", "service", "probes", "resources", "databaseSecret", "migrationSecret"],
+  "properties": {
+    "replicaCount": {"type": "integer", "minimum": 1, "maximum": 4},
+    "releaseLabel": {"type": "string", "minLength": 1},
+    "image": {"type": "object", "additionalProperties": false, "required": ["ref", "pullPolicy"], "properties": {"ref": {"type": "string", "minLength": 1}, "pullPolicy": {"enum": ["Always", "IfNotPresent", "Never"]}}},
+    "service": {"type": "object", "additionalProperties": false, "required": ["nodePort"], "properties": {"nodePort": {"enum": [30220, 30230]}}},
+    "probes": {"type": "object", "additionalProperties": false, "required": ["readinessPath"], "properties": {"readinessPath": {"type": "string", "pattern": "^/"}}},
+    "databaseSecret": {"type": "string", "minLength": 1},
+    "migrationSecret": {"type": "string", "minLength": 1},
+    "resources": {"type": "object", "additionalProperties": false, "required": ["requests", "limits"], "properties": {
+      "requests": {"type": "object", "additionalProperties": false, "required": ["cpu", "memory"], "properties": {"cpu": {"type": "string"}, "memory": {"type": "string"}}},
+      "limits": {"type": "object", "additionalProperties": false, "required": ["cpu", "memory"], "properties": {"cpu": {"type": "string"}, "memory": {"type": "string"}}}
+    }}
+  }
+}

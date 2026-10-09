@@ -1,0 +1,12 @@
+{
+  "source": "synthetic exercise; not measured service traffic",
+  "window": "one synthetic hour",
+  "all_attempts": 1200,
+  "excluded_invalid_client_attempts": 200,
+  "successful_within_300_ms": 970,
+  "successful_over_300_ms": 15,
+  "failed_eligible_attempts": 15,
+  "availability_slo": 0.99,
+  "fast_success_slo": 0.95,
+  "policy": "do not promote functional changes when availability budget is exceeded; handle incident fixes separately"
+}

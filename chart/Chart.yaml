@@ -1,0 +1,6 @@
+apiVersion: v2
+name: ticket-lab
+description: Training API only; existing PostgreSQL, secrets and service account are external
+type: application
+version: 0.1.0
+appVersion: advanced-m04

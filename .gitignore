@@ -1,0 +1,13 @@
+.runtime/
+.tools/
+.venv*/
+evidence/
+*.tfstate*
+*.tfplan
+infra/local.tfvars
+**/.terraform/
+*.dump
+*.sqlite
+__pycache__/
+backups/
+foundation/.runtime/

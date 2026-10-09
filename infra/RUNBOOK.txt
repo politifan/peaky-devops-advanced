@@ -1,0 +1,18 @@
+Terraform  от описания до наблюдаемого состояния
+Peaky Minds • Материалы курса • Редакция 2
+Terraform  от описания до наблюдаемого состояния
+Предусловие: инструменты из README в DOCX комплекте student, свободны порты 22220, 22221, 22280, 22281. Рабочий каталог ~/advanced-lab. Имёна dva-* принадлежат этому курсу; чужой одноимённый объект — повод остановиться и выяснить владельца.
+1. Ключ и конфигурация
+umask 077mkdir -p .runtime evidencessh-keygen -t ed25519 -f "$PWD/.runtime/ansible-key" -C dva-coursechmod 600 .runtime/ansible-keyprintf 'public_key_file = "%s"\n' "$PWD/.runtime/ansible-key.pub" > infra/local.tfvarscd infraterraform initterraform fmt -recursiveterraform validateterraform plan -var-file=local.tfvars -out=../.runtime/create.tfplanterraform show -no-color ../.runtime/create.tfplan > ../evidence/tf-create-plan.txt
+SSH-ключ без passphrase допустим только для изолированного стенда с приватным файлом; при passphrase используйте ssh-agent. В контейнер монтируется исключительно .pub. В plan сверить два контейнера, два отдельных тома, сеть, loopback порты и public key. Не публиковать state/plan: они могут содержать чувствительные значения. Сохранить .terraform.lock.hcl в Git — это выбор provider, не резервная копия state.
+terraform apply ../.runtime/create.tfplanterraform output -json nodes > ../evidence/tf-nodes.jsonterraform plan -var-file=local.tfvars -detailed-exitcode
+Последняя команда: 0 — различий нет, 2 — есть план изменений, 1 — ошибка. Код 2 не означает успешное применение. Не заменять просмотренный plan новым автоматическим планом. После изменения исходников снова сформировать и проверить plan.
+2. Drift
+Вернуться в корень. Проверить docker inspect dva-node-a и label course=dva, затем docker stop dva-node-a. В infra сформировать отдельный repair.tfplan, просмотреть и применить именно его. Записать фактическое действие provider: обновление/пересоздание нельзя обещать заранее. Проверить доступ SSH и пустой повторный plan. Ручной docker start скроет drift до наблюдения, поэтому сначала сохранить plan.
+3. Import собственного объекта
+В корне создать docker network create --label course=dva dva-import-lab. В infra добавить import-lab.tf:
+resource "docker_network" "imported" {  name = "dva-import-lab"  labels {    label = "course"    value = "dva"  }}
+Из infra: terraform import -var-file=local.tfvars docker_network.imported dva-import-lab, затем новый plan. Сверить ID сети до/после. Если предложена замена, исправить соответствие конфигурации до apply. Import меняет привязку state; он не угадывает желаемые аргументы и не переносит ответственность другого владельца. Не импортировать сеть Compose.
+4. Данные
+Создать маркер docker exec dva-node-a sh -c 'printf "persistent-marker\n" > /srv/dva/student-marker.txt'. Изменить только SSH-порт a на 22222, пересмотреть план, применить. Уточнить inventory в следующем модуле. Проверить тот же маркер и ID тома; вернуть порт на 22220 через ещё один plan.
+Том в модуле защищён prevent_destroy. Рассмотреть terraform plan -destroy -var-file=local.tfvars: ожидается отказ из-за защищённых томов, а не разрешение удалить данные. Удаление блока из конфигурации убирает и его защиту; guard не заменяет копию. Не выполнять destroy в обязательной практике. Сдача: планы, exit codes, IDs, marker, объяснение зависимости контейнер → volume. Provider, сохранённый plan.
