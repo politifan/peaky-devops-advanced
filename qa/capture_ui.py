@@ -26,9 +26,15 @@ with sync_playwright() as p:
         context.add_cookies(cookies)
     page=context.new_page()
     url='http://127.0.0.1:19090/alerts' if args.mode=='alert' else 'http://127.0.0.1:13000/d/dva-ticket/ticket-lab-operations?from=now-10m&to=now&refresh=5s'
-    page.goto(url,wait_until='networkidle',timeout=60000)
+    # Both interfaces poll continuously; an idle network is not readiness.
+    page.goto(url,wait_until='domcontentloaded',timeout=60000)
     phrase='TicketReadinessLost' if args.mode=='alert' else 'Requests per second'
-    page.get_by_text(phrase,exact=False).first.wait_for(timeout=30000)
+    try:
+        page.get_by_text(phrase,exact=False).first.wait_for(timeout=30000)
+    except Exception:
+        page.screenshot(path='evidence/'+args.mode+'-browser-failed.png',full_page=True)
+        Path('evidence/'+args.mode+'-browser-failed.txt').write_text(page.locator('body').inner_text())
+        raise
     page.wait_for_timeout(4000)
     text=page.locator('body').inner_text()
     if args.mode=='dashboard':
