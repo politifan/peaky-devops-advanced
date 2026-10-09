@@ -192,10 +192,10 @@ helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f
 echo '=== Small reproducible load using supplied profile ==='
 ./lab load --headless --host http://127.0.0.1:18220 -u 3 -r 1 -t 10s --csv evidence/load --only-summary
 ./lab analyze evidence/load_stats.csv > evidence/load-summary.json
-before=$(curl -fsS http://127.0.0.1:18220/tickets | jq 'length')
+before=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U postgres -d ticket_lab -Atc 'SELECT count(*) FROM tickets;')
 ./lab load-read --headless --host http://127.0.0.1:18220 -u 3 -r 1 -t 10s --csv evidence/read-load --only-summary
 ./lab analyze evidence/read-load_stats.csv > evidence/read-load-summary.json
-after=$(curl -fsS http://127.0.0.1:18220/tickets | jq 'length')
+after=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U postgres -d ticket_lab -Atc 'SELECT count(*) FROM tickets;')
 test "$before" = "$after"
 echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'
