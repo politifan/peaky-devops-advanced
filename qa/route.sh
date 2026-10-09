@@ -2,6 +2,15 @@
 set -euo pipefail
 export PATH="$PWD/.tools/bin:$PATH"
 mkdir -p evidence .runtime
+diagnostics() {
+ code=$?
+ if [ "$code" -ne 0 ]; then
+  kubectl --context kind-dva-course get pods,jobs -A -o wide > evidence/failure-pods.txt 2>&1 || true
+  kubectl --context kind-dva-course get events -A --sort-by=.metadata.creationTimestamp > evidence/failure-events.txt 2>&1 || true
+  docker exec dva-course-control-plane cat /etc/containerd/config.toml > evidence/failure-containerd.txt 2>&1 || true
+ fi
+}
+trap diagnostics EXIT
 echo '=== Foundation: two instances and distinct environments ==='
 ./lab foundation-start stage
 ./lab foundation-start dev
@@ -146,10 +155,17 @@ kubectl --context kind-dva-course -n dev delete deployment/ticket-api service/ti
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f chart/values-dev.yaml --atomic --wait --timeout 180s
 ./lab build-check
 ./lab registry
+# Test the node's actual CRI path, not only the host's successful push.
 ./lab deploy --artifact evidence --commit "$GITHUB_SHA"
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/promoted-old-http.json
 
 echo '=== Small reproducible load using supplied profile ==='
 ./lab load --headless --host http://127.0.0.1:18220 -u 3 -r 1 -t 10s --csv evidence/load --only-summary
 ./lab analyze evidence/load_stats.csv > evidence/load-summary.json
+before=$(curl -fsS http://127.0.0.1:18220/tickets | jq 'length')
+./lab load-read --headless --host http://127.0.0.1:18220 -u 3 -r 1 -t 10s --csv evidence/read-load --only-summary
+./lab analyze evidence/read-load_stats.csv > evidence/read-load-summary.json
+after=$(curl -fsS http://127.0.0.1:18220/tickets | jq 'length')
+test "$before" = "$after"
+echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'

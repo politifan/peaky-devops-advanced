@@ -20,6 +20,8 @@ def main():
  run('docker','tag',m['tag'],tag);run('docker','push',tag)
  obj=json.loads(run('docker','image','inspect',tag,capture_output=True,text=True).stdout)[0]
  refs=[r for r in obj['RepoDigests'] if r.startswith('localhost:5001/dva-ticket@sha256:')];assert len(refs)==1;ref=refs[0]
+ node=run('kind','get','nodes','--name','dva-course',capture_output=True,text=True).stdout.split()[0]
+ run('docker','exec',node,'crictl','pull',ref)
  for ns in ['dev','stage']:
   run('helm','--kube-context','kind-dva-course','upgrade','ticket-api',str(ROOT/'chart'),'-n',ns,'-f',str(ROOT/'chart'/('values-'+ns+'.yaml')),'--set-string','image.ref='+ref,'--set-string','releaseLabel=ci-'+a.commit,'--atomic','--wait','--timeout','180s')
   run('helm','--kube-context','kind-dva-course','test','ticket-api','-n',ns,'--timeout','60s')

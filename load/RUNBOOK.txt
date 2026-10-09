@@ -12,3 +12,8 @@ kubectl --context kind-dva-course -n dev get pods -l app=ticket-api
 
 Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
 Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.
+
+Первое сравнение без изменения данных: ./lab load-read --host http://127.0.0.1:18220 --headless -u 5 -r 1 -t 20s --csv evidence/read-a1
+Готовый профиль выполняет только GET списка. Повторите a2/a3, измените один параметр, повторите b1/b2/b3; имена файлов новые. Анализ: ./lab analyze evidence/read-a1_stats.csv
+Для Helm сначала сохраните исходные values: helm --kube-context kind-dva-course get values ticket-api -n dev --all > .runtime/m10-original.yaml
+После опыта верните эту конфигурацию через upgrade с -f .runtime/m10-original.yaml и проверьте HTTP.

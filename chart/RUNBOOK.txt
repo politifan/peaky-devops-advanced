@@ -5,8 +5,8 @@ Peaky Minds • редакция 3 • модуль 5
 
 helm lint chart
 helm template ticket-api chart -n stage -f chart/values-stage.yaml > evidence/rendered-stage.yaml
-kubectl --context kind-dva-course -n stage get deployment ticket-api service ticket-api
-kubectl --context kind-dva-course -n stage delete deployment ticket-api service ticket-api
+kubectl --context kind-dva-course -n stage get deployment/ticket-api service/ticket-api
+kubectl --context kind-dva-course -n stage delete deployment/ticket-api service/ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n stage -f chart/values-stage.yaml --atomic --wait --timeout 180s
 helm --kube-context kind-dva-course -n stage history ticket-api
 ./lab http --base http://127.0.0.1:18230 --out evidence/helm-stage.json

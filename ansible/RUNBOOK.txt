@@ -4,11 +4,7 @@ Peaky Minds • редакция 3 • модуль 3
 Все команды из корня ~/advanced-lab, кроме явно указанного cd.
 
 sed "s|/ABSOLUTE/PATH/advanced-lab|$PWD|g" ansible/inventory.example.ini > ansible/inventory.ini
-docker exec dva-node-a ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-docker exec dva-node-b ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
-ssh-keyscan -t ed25519 -p 22220 127.0.0.1 >> .runtime/known_hosts
-ssh-keyscan -t ed25519 -p 22221 127.0.0.1 >> .runtime/known_hosts
-ssh-keygen -lf .runtime/known_hosts
+./lab ssh-trust
 ansible -i ansible/inventory.ini training -m ansible.builtin.ping
 ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
 curl -fsS http://127.0.0.1:22280/health
@@ -18,3 +14,5 @@ ansible-playbook -i ansible/inventory.ini ansible/playbook.yml
 
 Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
 Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.
+
+Ключ с passphrase: eval "$(ssh-agent -s)"; ssh-add .runtime/ansible-key — только ваш учебный ключ.

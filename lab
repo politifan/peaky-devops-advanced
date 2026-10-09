@@ -18,6 +18,7 @@ case "$task" in
   build-check) exec bash scripts/build-check.sh "$@";;
   tools) exec bash scripts/tools.sh;;
   kube-start) exec bash scripts/kube-start.sh;;
+  load-read) exec bash scripts/load-read.sh "$@";;
   analyze) exec python3 load/analyze.py "$@";;
   load) exec bash scripts/load.sh "$@";;
   ssh-trust) exec bash scripts/ssh-trust.sh;;
