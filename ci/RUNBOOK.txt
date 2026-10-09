@@ -3,8 +3,8 @@ Peaky Minds • редакция 3 • модуль 6
 
 Все команды из корня ~/advanced-lab, кроме явно указанного cd.
 
-gh workflow run advanced.yml
-gh run list --workflow advanced.yml --limit 5
+gh workflow run advanced.yml --ref course-work
+gh run list --workflow advanced.yml --branch course-work --limit 5
 gh run view YOUR_RUN_ID
 gh run download YOUR_RUN_ID -n checked-image -D evidence/ci
 jq '{commit,image_id,tar_sha256}' evidence/ci/evidence/manifest.json

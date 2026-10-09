@@ -4,6 +4,7 @@ Peaky Minds: DevOps продвинутый — курс 301874, редакция
 Начните с базового курса https://stepik.org/course/301758 , если Linux, Git, curl и Compose пока незнакомы.
 Клонирование: git clone https://github.com/politifan/peaky-devops-advanced.git ~/advanced-lab
 cd ~/advanced-lab
+git switch -c course-work course-v3.0.0
 Установка Docker: https://docs.docker.com/engine/install/ubuntu/ либо https://docs.docker.com/engine/install/debian/
 Системные утилиты: sudo apt-get update && sudo apt-get install -y git gh curl jq unzip openssh-client ansible python3-venv
 chmod +x lab scripts/*.sh
@@ -25,3 +26,6 @@ State, plan, runtime, private key, kubeconfig, секреты и дампы не
 Полигон односерверный: два экземпляра не доказывают физическую HA. Vault и metrics-server — дополнительные варианты, не готовые сервисы обязательного комплекта.
 
 Готовым служебным CLI нужен системный интерпретатор версии 3.11 или новее; ученик его не программирует. Перед модулем 6: gh --version, gh auth login; создайте собственный fork и выберите gh repo set-default origin.
+
+Закреплённая редакция: https://github.com/politifan/peaky-devops-advanced/releases/tag/course-v3.0.0
+После fork выберите свой origin, gh auth setup-git и git push -u origin course-work. Для CI используйте gh workflow run advanced.yml --ref course-work. Владельцу собственного репозитория новый fork не нужен.

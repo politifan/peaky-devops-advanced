@@ -13,13 +13,13 @@ snapshot() {
 }
 snapshot > evidence/dataset-before.json
 test "$(jq 'length' evidence/dataset-before.json)" -gt 20
-helm --kube-context kind-dva-course get values ticket-api -n dev --all > .runtime/m10-original.yaml
-./lab load-read --headless --host http://127.0.0.1:18220 -u 5 -r 1 -t 5s --csv evidence/warmup --only-summary
+helm --kube-context kind-dva-course get values ticket-api -n dev --all --output yaml > .runtime/m10-original.yaml
 for phase in a b; do
  limit=100m
  if [ "$phase" = b ]; then limit=500m; fi
  helm --kube-context kind-dva-course upgrade ticket-api chart -n dev -f .runtime/m10-original.yaml --set "resources.limits.cpu=$limit" --atomic --wait --timeout 180s
  kubectl --context kind-dva-course -n dev get deployment ticket-api -o json | jq -r '.spec.template.spec.containers[0].resources.limits.cpu' | grep -qx "$limit"
+ ./lab load-read --headless --host http://127.0.0.1:18220 -u 5 -r 1 -t 5s --csv "evidence/warmup-$phase" --only-summary
  for n in 1 2 3; do
   ./lab load-read --headless --host http://127.0.0.1:18220 -u 5 -r 1 -t 20s --csv "evidence/read-$phase$n" --only-summary
   ./lab analyze "evidence/read-$phase${n}_stats.csv" > "evidence/read-$phase$n.json"
