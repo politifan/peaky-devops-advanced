@@ -22,5 +22,13 @@ done
 kubectl --context kind-dva-course -n dev patch service ticket-api --type merge -p '{"spec":{"type":"NodePort","ports":[{"name":"http","port":8000,"targetPort":"http","nodePort":30220}]}}'
 kubectl --context kind-dva-course -n stage patch service ticket-api --type merge -p '{"spec":{"type":"NodePort","ports":[{"name":"http","port":8000,"targetPort":"http","nodePort":30230}]}}'
 mkdir -p evidence
+for port in 18220 18230; do
+  ready=0
+  for attempt in $(seq 1 60); do
+    if curl -fsS --max-time 3 "http://127.0.0.1:$port/ready" >/dev/null; then ready=1; break; fi
+    sleep 1
+  done
+  test "$ready" = 1 || { echo "NodePort $port not ready"; exit 1; }
+done
 ./lab http --base http://127.0.0.1:18220 --out "evidence/dev-$(date +%s).json"
 ./lab http --base http://127.0.0.1:18230 --out "evidence/stage-$(date +%s).json"
