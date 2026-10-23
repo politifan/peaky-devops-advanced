@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 # Short useful-operation check, not a long-term SLO measurement.
 import argparse
 from datetime import datetime, timezone
@@ -8,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from safety import NoRedirect, require
 
 
 def main():
@@ -24,7 +29,7 @@ def main():
     if args.expected and args.read_id is None:
         parser.error('--expected requires --read-id')
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
     report = {'started_utc': datetime.now(timezone.utc).isoformat(), 'requests': [], 'passed': False}
     with args.out.open('x', encoding='utf-8') as output:
         def request(method, path, data=None, expected_status=200):
@@ -48,22 +53,22 @@ def main():
             finally:
                 row['elapsed_ms'] = round((time.monotonic() - started) * 1000, 2)
         try:
-            assert request('GET', '/health')['status'] == 'alive'
-            assert request('GET', '/ready')['status'] == 'ready'
+            require(request('GET', '/health')['status'] == 'alive', 'Health contract failed')
+            require(request('GET', '/ready')['status'] == 'ready', 'Readiness contract failed')
             if args.read_id is not None:
                 old = request('GET', f'/tickets/{args.read_id}')
-                assert old['id'] == args.read_id
+                require(old['id'] == args.read_id, 'Old ticket ID mismatch')
                 report['old_ticket'] = old
                 if args.expected:
-                    assert old == json.loads(args.expected.read_text(encoding='utf-8'))
+                    require(old == json.loads(args.expected.read_text(encoding='utf-8')), 'Old ticket changed')
             title = 'dva-http-' + uuid.uuid4().hex
             created = request('POST', '/tickets', {'title': title}, 201)
-            assert created['title'] == title and created['status'] == 'open'
+            require(created['title'] == title and created['status'] == 'open', 'Create contract failed')
             path = f'/tickets/{created["id"]}'
-            assert request('GET', path) == created
+            require(request('GET', path) == created, 'Created ticket read mismatch')
             updated = request('PATCH', path, {'status': 'closed'})
-            assert updated == {**created, 'status': 'closed'}
-            assert request('GET', path) == updated
+            require(updated == {**created, 'status': 'closed'}, 'Update contract failed')
+            require(request('GET', path) == updated, 'Updated ticket read mismatch')
             request('POST', '/tickets', {'title': '   '}, 422)
             request('PATCH', path, {'status': 'unknown'}, 422)
             request('GET', '/tickets/0', expected_status=404)
@@ -81,3 +86,4 @@ def main():
 
 if __name__ == '__main__':
     raise SystemExit(main())
+

@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 # Configure only the bound training cluster; adapted from the official kind local registry route.
 import json
 import subprocess
@@ -47,3 +51,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

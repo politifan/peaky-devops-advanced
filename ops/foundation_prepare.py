@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 from pathlib import Path
 import secrets,sys,os
 ns=sys.argv[1]
@@ -14,3 +18,4 @@ for p,text in zip(names,texts):
     fd=os.open(p,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
     with os.fdopen(fd,'w') as f:f.write(text)
 print('Created private training credentials; values not printed')
+

@@ -186,7 +186,7 @@ helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f
 ./lab build-check
 ./lab registry
 # Test the node's actual CRI path, not only the host's successful push.
-./lab deploy --artifact evidence --commit "$GITHUB_SHA"
+./lab deploy --artifact "$(cat evidence/latest-build.txt)" --commit "$GITHUB_SHA"
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/promoted-old-http.json
 
 echo '=== Small reproducible load using supplied profile ==='
@@ -199,3 +199,4 @@ after=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U post
 test "$before" = "$after"
 echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'
+

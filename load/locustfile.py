@@ -1,5 +1,6 @@
 from locust import HttpUser, task, constant
 import uuid
+from target_safety import check_user
 
 
 class TicketUser(HttpUser):
@@ -7,7 +8,8 @@ class TicketUser(HttpUser):
 
     @task(4)
     def list_tickets(self):
-        with self.client.get('/tickets?limit=20&offset=0', name='GET tickets list', timeout=10, catch_response=True) as response:
+        check_user(self)
+        with self.client.get('/tickets?limit=20&offset=0', name='GET tickets list', timeout=10, catch_response=True, allow_redirects=False) as response:
             try:
                 if response.status_code != 200 or not isinstance(response.json(), list):
                     response.failure('List contract failed')
@@ -16,11 +18,13 @@ class TicketUser(HttpUser):
 
     @task(1)
     def create_ticket(self):
+        check_user(self)
         title = 'load-' + uuid.uuid4().hex
-        with self.client.post('/tickets', json={'title': title}, name='POST tickets', timeout=10, catch_response=True) as response:
+        with self.client.post('/tickets', json={'title': title}, name='POST tickets', timeout=10, catch_response=True, allow_redirects=False) as response:
             try:
                 data = response.json()
                 if response.status_code != 201 or data.get('title') != title or data.get('status') != 'open':
                     response.failure('Create contract failed')
             except (ValueError, AttributeError):
                 response.failure('Invalid response shape')
+

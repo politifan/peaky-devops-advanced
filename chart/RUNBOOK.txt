@@ -1,3 +1,7 @@
+SAFETY: Before the command block below, from the repository root, run:
+./lab guard
+Stop on any error. Do not rebind or substitute a context to bypass this check.
+
 Peaky Minds • редакция 3 • модуль 5
 Отдать управление API Helm, сохранив БД
 
@@ -15,3 +19,4 @@ helm --kube-context kind-dva-course -n stage history ticket-api
 
 Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
 Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.
+

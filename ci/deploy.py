@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 import argparse,hashlib,json,re,sys,uuid
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/'ops'))
@@ -29,3 +33,4 @@ def main():
  (ROOT/'evidence/deployed-image.json').write_text(json.dumps({'commit':a.commit,'image_ref':ref,'source':m},indent=2))
  print('One checked registry digest passed dev then stage: '+ref)
 if __name__=='__main__':main()
+

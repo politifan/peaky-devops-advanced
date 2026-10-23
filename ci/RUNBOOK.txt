@@ -1,3 +1,5 @@
+ARTIFACT UPDATE: replace build-ATTEMPT with the actual build-<uuid> directory from the selected successful CI run. See SAFE-REVIEW-CHANGES.md.
+
 Peaky Minds • редакция 3 • модуль 6
 Один проверенный образ вместо зелёной картинки
 
@@ -7,9 +9,10 @@ gh workflow run advanced.yml --ref course-work
 gh run list --workflow advanced.yml --branch course-work --limit 5
 gh run view YOUR_RUN_ID
 gh run download YOUR_RUN_ID -n checked-image -D evidence/ci
-jq '{commit,image_id,tar_sha256}' evidence/ci/evidence/manifest.json
+jq '{commit,image_id,tar_sha256}' evidence/ci/evidence/build-ATTEMPT/manifest.json
 
 YOUR_RUN_ID — подстановка фактического ID выбранного запуска. Выданный workflow запускается на GitHub-hosted runner и проверяет готовое приложение, PostgreSQL, миграцию, HTTP и образ. Артефакт содержит evidence/ и готовые lock-файлы. Ваш fork должен разрешать Actions. Ошибка любого обязательного этапа запрещает допуск. В этой редакции нет обещания автоматического deploy в ваш WSL: локальная поставка выполняется оператором из проверенного артефакта. Self-hosted runner с доступом к Docker — дополнительный отдельный контур; не давайте ему недоверенные pull requests. Полный маршрут ci/DEPLOY.txt объясняет проверку checksum, загрузку одного образа и dev→stage.
 
 Остановка при ошибке: запишите ненулевой exit code и последнее успешное наблюдение. Проверьте цель и причину, исправьте один фактор, повторите операцию новым именем evidence. Не удаляйте данные ради зелёного результата.
 Дополнительные эксперименты и критерии каждого урока приведены в Stepik; общая подготовка выше выполняется один раз, а не повторно на каждом уроке.
+

@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 """Author acceptance only: real browser screens from the isolated live lab."""
 import argparse
 import http.cookiejar
@@ -44,3 +48,4 @@ with sync_playwright() as p:
     page.screenshot(path='evidence/'+args.mode+'-browser.png',full_page=True)
     browser.close()
 print('Captured live '+args.mode+' browser UI without exporting authentication state')
+

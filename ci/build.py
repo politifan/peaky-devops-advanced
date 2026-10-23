@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 import hashlib
 import json
 import os
@@ -8,6 +12,25 @@ import time
 import uuid
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def clean_source(sha):
+    if not re.fullmatch('[0-9a-f]{40}', sha):
+        raise RuntimeError('Expected a full commit SHA')
+    if run('git', 'rev-parse', 'HEAD', capture_output=True, text=True, cwd=ROOT).stdout.strip() != sha:
+        raise RuntimeError('Commit differs from HEAD')
+    # Only inputs read by this build; unrelated lab evidence/infra exercises are allowed.
+    inputs = ('ticket-lab', 'ci', 'ops/http_check.py', 'ops/safety.py', 'scripts/build-check.sh')
+    status = run('git', 'status', '--porcelain', '--untracked-files=all', '--', *inputs,
+                 cwd=ROOT, capture_output=True, text=True).stdout
+    if status.strip():
+        raise RuntimeError('Commit build inputs before creating a commit-labelled image')
+
+
+def new_evidence():
+    folder = ROOT / 'evidence' / ('build-' + uuid.uuid4().hex)
+    folder.mkdir(parents=True, exist_ok=False)
+    return folder
 
 
 def run(*args, **kwargs):
@@ -24,14 +47,13 @@ def digest(path):
 
 def main():
     sha = os.environ['GITHUB_SHA']
-    assert re.fullmatch('[0-9a-f]{40}', sha)
-    assert run('git', 'rev-parse', 'HEAD', capture_output=True, text=True).stdout.strip() == sha
+    clean_source(sha)
     for name in ('requirements.lock', 'requirements-dev.lock'):
         assert (ROOT / 'ticket-lab' / name).is_file(), 'Create and commit Linux/Python3.12 locks first'
     run('python', '-m', 'pip', 'install', '--require-hashes', '-r', 'requirements-dev.lock', cwd=ROOT / 'ticket-lab')
     run('python', '-m', 'pip', 'check')
-    evidence = ROOT / 'evidence'
-    evidence.mkdir(exist_ok=True)
+    evidence = new_evidence()
+    print('Build artifact directory: ' + str(evidence), flush=True)
     run('python', '-m', 'pytest', '-q', f'--junitxml={evidence / "pytest.xml"}', cwd=ROOT / 'ticket-lab')
     tag = f'dva-ticket:ci-{sha}'
     run('docker', 'build', '-f', str(ROOT / 'ci' / 'Dockerfile.lock'),
@@ -66,7 +88,7 @@ def main():
             time.sleep(1)
         else:
             raise RuntimeError('CI API not ready')
-        run('python', 'ops/http_check.py', '--base', 'http://127.0.0.1:18300', '--out', 'evidence/http.json', cwd=ROOT)
+        run('python', 'ops/http_check.py', '--base', 'http://127.0.0.1:18300', '--out', str(evidence / 'http.json'), cwd=ROOT)
         info = json.loads(run('docker', 'image', 'inspect', tag, capture_output=True, text=True).stdout)[0]
         assert info['Config']['Labels']['org.opencontainers.image.revision'] == sha
         tar = evidence / 'image.tar'
@@ -74,6 +96,10 @@ def main():
         manifest = {'commit': sha, 'tag': tag, 'image_id': info['Id'], 'os': info['Os'], 'architecture': info['Architecture'],
                     'tar_sha256': digest(tar), 'http_check_passed': True}
         (evidence / 'manifest.json').write_text(json.dumps(manifest, indent=2) + '\n')
+        # Pointer is metadata only; previous attempt evidence remains untouched.
+        pointer = ROOT / 'evidence' / ('latest-build-' + nonce + '.tmp')
+        pointer.write_text(str(evidence) + '\n', encoding='utf-8')
+        pointer.replace(ROOT / 'evidence' / 'latest-build.txt')
     finally:
         for name in (api, db):
             subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -82,3 +108,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+

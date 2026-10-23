@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 import json
 import urllib.request
 import uuid
@@ -14,3 +18,4 @@ with opener.open(request, timeout=10) as response:
 with opener.open(f'http://ticket-api:8000/tickets/{created["id"]}', timeout=10) as response:
     assert response.status == 200 and json.load(response) == created
 print('Internal readiness and create/read succeeded')
+

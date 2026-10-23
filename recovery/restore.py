@@ -1,3 +1,7 @@
+# Acceptance and safety assertions must never be disabled.
+if not __debug__:
+    raise RuntimeError('Optimized Python is unsupported; unset PYTHONOPTIMIZE and do not use -O')
+
 import argparse
 import base64
 from datetime import datetime, timezone
@@ -23,17 +27,26 @@ def main():
     assert manifest['source_namespace'] in {'dev', 'stage'}
     assert digest(args.folder / 'ticket.dump') == manifest['sha256']
     expected = json.loads((args.folder / 'snapshot.json').read_text())
+    # Same-cluster restore only: fail before creating anything if the source
+    # namespace/credentials or required image is unavailable. No automatic rebind.
+    source_ns = json.loads(k('get', 'namespace', manifest['source_namespace'], '-o', 'json', capture_output=True, text=True).stdout)
+    if source_ns['metadata'].get('labels', {}).get('course') != 'dva':
+        raise RuntimeError('Source namespace is not owned by this course')
+    secrets = {}
+    for name in ('dva-db-admin', 'dva-migrate-db', 'dva-app-db'):
+        original = json.loads(k('-n', manifest['source_namespace'], 'get', 'secret', name, '-o', 'json', capture_output=True, text=True).stdout)
+        secrets[name] = original['data']
+    from guard import run
+    node = run('kind', 'get', 'nodes', '--name', 'dva-course', capture_output=True, text=True).stdout.split()[0]
+    run('docker', 'exec', node, 'crictl', 'inspecti', manifest['image_ref'], capture_output=True, text=True)
     started = time.monotonic()
     began = datetime.now(timezone.utc).isoformat()
     ns = args.destination
     # Create fails if a namespace already exists; do not restore over an existing database.
     k('create', '-f', '-', input=json.dumps({'apiVersion': 'v1', 'kind': 'Namespace',
        'metadata': {'name': ns, 'labels': {'course': 'dva'}}}), text=True)
-    secrets = {}
     for name in ('dva-db-admin', 'dva-migrate-db', 'dva-app-db'):
-        original = json.loads(k('-n', manifest['source_namespace'], 'get', 'secret', name, '-o', 'json', capture_output=True, text=True).stdout)
-        secrets[name] = original['data']
-        value = {'apiVersion': 'v1', 'kind': 'Secret', 'type': 'Opaque', 'metadata': {'name': name, 'namespace': ns}, 'data': original['data']}
+        value = {'apiVersion': 'v1', 'kind': 'Secret', 'type': 'Opaque', 'metadata': {'name': name, 'namespace': ns}, 'data': secrets[name]}
         k('create', '-f', '-', input=json.dumps(value), text=True)
     k('-n', ns, 'apply', '-f', str(ROOT / 'k8s' / 'db.yaml'))
     k('-n', ns, 'rollout', 'status', 'statefulset/postgres', '--timeout=120s')
@@ -77,3 +90,4 @@ if __name__ == '__main__':
     except Exception as error:
         print(f'Restore stopped: {type(error).__name__}', file=sys.stderr)
         raise SystemExit(1)
+
