@@ -1,5 +1,7 @@
 name: Advanced course route acceptance
 on:
+  push:
+    branches: [codex/devops-quality-20261023]
   workflow_dispatch:
 permissions:
   contents: read
@@ -35,3 +37,5 @@ jobs:
             backups/**/manifest.json
             backups/**/restore*.json
           retention-days: 30
+
+
