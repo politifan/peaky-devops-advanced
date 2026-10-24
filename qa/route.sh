@@ -222,5 +222,3 @@ after=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U post
 test "$before" = "$after"
 echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'
-
-
