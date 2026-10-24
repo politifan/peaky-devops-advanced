@@ -5,6 +5,7 @@ import io
 import json
 from pathlib import Path
 import unittest
+import threading
 from unittest.mock import Mock, patch
 import urllib.error
 import urllib.request
@@ -20,6 +21,80 @@ def refused():
 
 
 class RetryTests(unittest.TestCase):
+    def test_cli_has_55s_watchdog_and_cancels_it_on_exit(self):
+        for outcome in (None, TimeoutError('ambiguous write timeout')):
+            with self.subTest(outcome=outcome), patch.object(check.signal, 'SIGALRM', 100, create=True), \
+                 patch.object(check.signal, 'signal', return_value='previous') as handler, \
+                 patch.object(check.signal, 'alarm', create=True) as alarm, \
+                 patch.object(check, 'main', side_effect=outcome):
+                if outcome is None:
+                    check.run_cli()
+                else:
+                    with self.assertRaises(TimeoutError):
+                        check.run_cli()
+                self.assertEqual([call.args[0] for call in alarm.call_args_list], [55, 0])
+                self.assertEqual(handler.call_args.args, (100, 'previous'))
+
+    def test_readiness_timeout_then_success_is_get_only(self):
+        class Response(io.BytesIO):
+            status = 200
+        opener = Mock()
+        opener.open.side_effect = [urllib.error.URLError(TimeoutError('connect timeout')),
+                                  Response(b'{"status":"ready"}')]
+        sleep = Mock()
+        check.wait_readiness(opener, monotonic=lambda: 0, sleep=sleep)
+        self.assertEqual(opener.open.call_count, 2)
+        self.assertTrue(all(call.args[0].get_method() == 'GET' for call in opener.open.call_args_list))
+        self.assertTrue(all(call.kwargs['timeout'] <= 3 for call in opener.open.call_args_list))
+        sleep.assert_called_once_with(0.5)
+
+    def test_readiness_budget_exhaustion_never_reaches_post(self):
+        opener = Mock()
+        opener.open.side_effect = TimeoutError('connect timeout')
+        # Exercise main with the real waiter and an exhausted injected clock.
+        original = check.wait_readiness
+        with patch.object(check, 'wait_readiness', side_effect=lambda client: original(client,
+            monotonic=Mock(side_effect=[0, 0, 25]), sleep=Mock())):
+            with self.assertRaises(TimeoutError):
+                check.main(opener)
+        opener.open.assert_called_once()
+        self.assertEqual(opener.open.call_args.args[0].get_method(), 'GET')
+
+    def test_malformed_readiness_body_or_contract_is_terminal(self):
+        class Response(io.BytesIO):
+            status = 200
+        for body in (b'not-json', b'{"status":"wrong"}', b'[]'):
+            with self.subTest(body=body):
+                opener = Mock()
+                opener.open.return_value = Response(body)
+                with self.assertRaises((ValueError, RuntimeError)):
+                    check.main(opener)
+                opener.open.assert_called_once()
+                self.assertEqual(opener.open.call_args.args[0].get_method(), 'GET')
+
+    def test_readiness_http503_does_not_retry(self):
+        opener = Mock()
+        opener.open.side_effect = urllib.error.HTTPError('http://ticket-api:8000/ready',503,'unavailable',{},None)
+        with self.assertRaises(urllib.error.HTTPError):
+            check.main(opener)
+        opener.open.assert_called_once()
+
+    def test_readiness_wall_clock_cap_for_stalled_get(self):
+        release = threading.Event()
+        class Response(io.BytesIO):
+            status = 200
+        def stalled(*args, **kwargs):
+            release.wait(timeout=1)
+            return Response(b'{"status":"ready"}')
+        opener = Mock()
+        opener.open.side_effect = stalled
+        try:
+            with self.assertRaises(TimeoutError):
+                check.wait_readiness(opener, budget=0.02)
+        finally:
+            release.set()
+        opener.open.assert_called_once()
+
     def test_refused_then_success_keeps_same_request_and_payload(self):
         request = urllib.request.Request('http://ticket-api:8000/tickets', data=b'{"title":"fixed"}', method='POST')
         response = object()

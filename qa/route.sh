@@ -8,6 +8,9 @@ diagnostics() {
   kubectl --context kind-dva-course get pods,jobs -A -o wide > evidence/failure-pods.txt 2>&1 || true
   kubectl --context kind-dva-course get events -A --sort-by=.metadata.creationTimestamp > evidence/failure-events.txt 2>&1 || true
   for ns in dev stage; do
+   kubectl --request-timeout=10s --context kind-dva-course -n "$ns" get service ticket-api -o json > "evidence/failure-service-$ns.json" 2>&1 || true
+   kubectl --request-timeout=10s --context kind-dva-course -n "$ns" get endpointslices -l kubernetes.io/service-name=ticket-api -o json > "evidence/failure-endpoints-$ns.json" 2>&1 || true
+   kubectl --request-timeout=10s --context kind-dva-course -n "$ns" logs -l app=ticket-api -c api --tail=100 --since=2m --timestamps --prefix --max-log-requests=4 > "evidence/failure-api-$ns.log" 2>&1 || true
    kubectl --context kind-dva-course -n "$ns" logs ticket-api-check --all-containers --timestamps > "evidence/failure-helm-check-$ns.log" 2>&1 || true
    kubectl --context kind-dva-course -n "$ns" get pod ticket-api-check -o json > "evidence/failure-helm-check-$ns.json" 2>&1 || true
   done

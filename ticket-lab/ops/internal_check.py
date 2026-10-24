@@ -4,6 +4,9 @@ if not __debug__:
 
 import errno
 import json
+import queue
+import signal
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -26,7 +29,9 @@ def open_connect_refused_only(opener, request, stage, *, budget=10, max_attempts
             break
         print(f'stage={stage} event=connect attempt={attempt}', flush=True)
         try:
-            response = opener.open(request, timeout=min(10, remaining))
+            # At most 5s per socket I/O. The CLI also has a hard 55s alarm,
+            # including DNS/body reads, below Helm's unchanged 60s timeout.
+            response = opener.open(request, timeout=min(5, remaining))
             print(f'stage={stage} event=connected attempt={attempt}', flush=True)
             return response
         except urllib.error.HTTPError:
@@ -54,12 +59,65 @@ def require(condition, stage):
         raise RuntimeError(f'Internal {stage} contract failed')
 
 
+def wait_readiness(opener, *, budget=25, max_attempts=12, delay=0.5,
+                   monotonic=time.monotonic, sleep=time.sleep):
+    """Bound the readiness-only GET wait, including slow DNS/transport, to 25s.
+
+    The daemon worker can only issue GET; cancellation forbids further attempts.
+    No HTTP error or malformed contract is converted into a retry.
+    """
+    if not 0 < budget <= 30:
+        raise ValueError('Readiness budget must be between 0 and 30 seconds')
+    deadline = monotonic() + budget
+    stopped = threading.Event()
+    result = queue.Queue(maxsize=1)
+    request = urllib.request.Request('http://ticket-api:8000/ready')
+    def worker():
+        try:
+            for attempt in range(1, max_attempts + 1):
+                remaining = deadline - monotonic()
+                if stopped.is_set() or remaining <= 0:
+                    break
+                print(f'stage=ready event=connect attempt={attempt}', flush=True)
+                try:
+                    with opener.open(request, timeout=min(3, remaining)) as response:
+                        body = json.load(response)
+                        require(response.status == 200 and isinstance(body, dict) and body.get('status') == 'ready', 'ready')
+                    if stopped.is_set() or monotonic() > deadline:
+                        break
+                    print(f'stage=ready event=confirmed attempt={attempt}', flush=True)
+                    result.put(None)
+                    return
+                except urllib.error.HTTPError:
+                    raise
+                except (urllib.error.URLError, OSError) as error:
+                    reason = error.reason if isinstance(error, urllib.error.URLError) else error
+                    safe_retry = isinstance(reason, TimeoutError) or (isinstance(reason, ConnectionRefusedError) and reason.errno == errno.ECONNREFUSED)
+                    if not safe_retry:
+                        raise
+                    print(f'stage=ready event=transport_retry error_type={type(reason).__name__} attempt={attempt}', flush=True)
+                    remaining = deadline - monotonic()
+                    if stopped.is_set() or remaining <= 0 or attempt == max_attempts:
+                        break
+                    sleep(min(delay, remaining))
+            raise TimeoutError('Readiness GET budget exhausted; POST not attempted')
+        except Exception as error:
+            result.put(error)
+    threading.Thread(target=worker, daemon=True, name='readiness-get-only').start()
+    try:
+        outcome = result.get(timeout=budget)
+    except queue.Empty:
+        raise TimeoutError('Readiness GET wall-clock budget exhausted; POST not attempted') from None
+    finally:
+        stopped.set()
+    if outcome is not None:
+        raise outcome
+
+
 def main(opener=None):
     if opener is None:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
-    ready_request = urllib.request.Request('http://ticket-api:8000/ready')
-    with open_connect_refused_only(opener, ready_request, 'ready') as response:
-        require(response.status == 200 and json.load(response).get('status') == 'ready', 'ready')
+    wait_readiness(opener)
     title = 'helm-check-' + uuid.uuid4().hex
     request = urllib.request.Request('http://ticket-api:8000/tickets',
         data=json.dumps({'title': title}).encode(), headers={'Content-Type': 'application/json'}, method='POST')
@@ -74,5 +132,21 @@ def main(opener=None):
     print('Internal readiness and create/read succeeded', flush=True)
 
 
+def run_cli():
+    # The hook image is Linux. Importing on Windows remains safe for unit tests.
+    if not hasattr(signal, 'SIGALRM'):
+        raise RuntimeError('Hook CLI requires Linux SIGALRM for its overall deadline')
+    def expired(signum, frame):
+        print('stage=check event=overall_budget_exhausted', flush=True)
+        raise TimeoutError('Internal hook overall 55s budget exhausted')
+    previous = signal.signal(signal.SIGALRM, expired)
+    signal.alarm(55)
+    try:
+        main()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
 if __name__ == '__main__':
-    main()
+    run_cli()
