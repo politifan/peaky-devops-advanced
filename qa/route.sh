@@ -7,6 +7,10 @@ diagnostics() {
  if [ "$code" -ne 0 ]; then
   kubectl --context kind-dva-course get pods,jobs -A -o wide > evidence/failure-pods.txt 2>&1 || true
   kubectl --context kind-dva-course get events -A --sort-by=.metadata.creationTimestamp > evidence/failure-events.txt 2>&1 || true
+  for ns in dev stage; do
+   kubectl --context kind-dva-course -n "$ns" logs ticket-api-check --all-containers --timestamps > "evidence/failure-helm-check-$ns.log" 2>&1 || true
+   kubectl --context kind-dva-course -n "$ns" get pod ticket-api-check -o json > "evidence/failure-helm-check-$ns.json" 2>&1 || true
+  done
   docker exec dva-course-control-plane cat /etc/containerd/config.toml > evidence/failure-containerd.txt 2>&1 || true
  fi
 }
@@ -141,7 +145,6 @@ kubectl --context kind-dva-course -n monitoring rollout status deployment/promet
 kubectl --context kind-dva-course -n monitoring rollout status deployment/grafana --timeout=180s
 kubectl --context kind-dva-course -n monitoring exec deployment/prometheus -- promtool check config /etc/prometheus/prometheus.yml
 kubectl --context kind-dva-course -n monitoring exec deployment/prometheus -- promtool check rules /etc/prometheus/rules.yml
-kubectl --context kind-dva-course -n monitoring exec -i deployment/prometheus -- promtool test rules /dev/stdin < monitoring/dashboard-promql.test.yml
 # Offline expression fixtures only; no samples are injected into the running server.
 kubectl --context kind-dva-course -n monitoring exec -i deployment/prometheus -- promtool test rules /dev/stdin < monitoring/dashboard-promql.test.yml
 kubectl --context kind-dva-course -n monitoring port-forward service/prometheus 19090:9090 > evidence/prometheus-port.txt 2>&1 &
@@ -219,4 +222,5 @@ after=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U post
 test "$before" = "$after"
 echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'
+
 
