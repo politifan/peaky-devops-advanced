@@ -6,6 +6,7 @@ import errno
 import json
 import queue
 import signal
+import socket
 import threading
 import time
 import urllib.error
@@ -126,10 +127,40 @@ def main(opener=None):
         created = json.load(response)
         require(type(created.get('id')) is int and created['id'] > 0 and
                 created.get('title') == title and created.get('status') == 'open', 'create body')
+    print(f'stage=create event=committed_ticket id={created["id"]}', flush=True)
     read_request = urllib.request.Request(f'http://ticket-api:8000/tickets/{created["id"]}')
     with open_connect_refused_only(opener, read_request, 'read') as response:
         require(response.status == 200 and json.load(response) == created, 'read')
     print('Internal readiness and create/read succeeded', flush=True)
+
+
+def failure_tcp_probe():
+    """Diagnostic TCP handshakes only, after failure. No HTTP request is sent."""
+    # Numeric resolver result from the configured Service DNS is logged. The
+    # watchdog includes this diagnostic; never create/retry a ticket here.
+    addresses=socket.getaddrinfo('ticket-api',8000,type=socket.SOCK_STREAM)
+    targets=sorted({(family,address[0],address[1]) for family,_,_,_,address in addresses})
+    print(json.dumps({'event':'failure_dns','service':'ticket-api','addresses':[host for _,host,_ in targets]}),flush=True)
+    for family,host,port in targets[:2]:
+        for attempt in range(1,3):
+            sock=socket.socket(family,socket.SOCK_STREAM);sock.settimeout(0.5)
+            started=time.monotonic()
+            outcome='interrupted'
+            try:
+                sock.connect((host,port))
+                outcome='connected'
+            except HookDeadlineExceeded:
+                raise
+            except OSError as error:
+                outcome=type(error).__name__
+            finally:
+                print(json.dumps({'event':'failure_tcp_only','target_ip':host,'port':port,'attempt':attempt,
+                    'local':sock.getsockname(),'outcome':outcome,'elapsed_ms':round((time.monotonic()-started)*1000,2)}),flush=True)
+                sock.close()
+
+
+class HookDeadlineExceeded(TimeoutError):
+    pass
 
 
 def run_cli():
@@ -138,11 +169,19 @@ def run_cli():
         raise RuntimeError('Hook CLI requires Linux SIGALRM for its overall deadline')
     def expired(signum, frame):
         print('stage=check event=overall_budget_exhausted', flush=True)
-        raise TimeoutError('Internal hook overall 55s budget exhausted')
+        raise HookDeadlineExceeded('Internal hook overall 55s budget exhausted')
     previous = signal.signal(signal.SIGALRM, expired)
     signal.alarm(55)
     try:
-        main()
+        try:
+            main()
+        except Exception as original_error:
+            # Keep diagnostics inside the same 55s deadline. Skip them if the
+            # watchdog has already fired; preserve the original failure.
+            if not isinstance(original_error,HookDeadlineExceeded):
+                try:failure_tcp_probe()
+                except Exception as error:print(f'event=failure_probe_error error_type={type(error).__name__}',flush=True)
+            raise
     finally:
         signal.alarm(0)
         signal.signal(signal.SIGALRM, previous)

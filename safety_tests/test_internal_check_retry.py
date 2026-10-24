@@ -21,12 +21,24 @@ def refused():
 
 
 class RetryTests(unittest.TestCase):
+    def test_failure_diagnostic_sends_no_http_or_payload(self):
+        sock=Mock()
+        sock.getsockname.return_value=('10.244.0.41',40001)
+        with patch.object(check.socket,'getaddrinfo',return_value=[(2,1,6,'',('10.96.161.7',8000))]), \
+             patch.object(check.socket,'socket',return_value=sock):
+            check.failure_tcp_probe()
+        self.assertEqual(sock.connect.call_count,2)
+        sock.send.assert_not_called()
+        sock.sendall.assert_not_called()
+        self.assertEqual(sock.close.call_count,2)
+
     def test_cli_has_55s_watchdog_and_cancels_it_on_exit(self):
         for outcome in (None, TimeoutError('ambiguous write timeout')):
             with self.subTest(outcome=outcome), patch.object(check.signal, 'SIGALRM', 100, create=True), \
                  patch.object(check.signal, 'signal', return_value='previous') as handler, \
                  patch.object(check.signal, 'alarm', create=True) as alarm, \
-                 patch.object(check, 'main', side_effect=outcome):
+                 patch.object(check, 'main', side_effect=outcome), \
+                 patch.object(check, 'failure_tcp_probe'):
                 if outcome is None:
                     check.run_cli()
                 else:
