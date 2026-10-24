@@ -54,16 +54,18 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m])) / sum by (namespace) (rate(ticket_http_requests_total[1m]))",
+          "expr": "(((sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m]))) or on (namespace) (0 * (sum by (namespace) (rate(ticket_http_requests_total[1m]))))) / (sum by (namespace) (rate(ticket_http_requests_total[1m])))) and on (namespace) ((sum by (namespace) (rate(ticket_http_requests_total[1m]))) > 0)",
           "legendFormat": "{{namespace}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percentunit"
+          "unit": "percentunit",
+          "noValue": "N/A"
         },
         "overrides": []
-      }
+      },
+      "description": "Observed 5xx / requests. Zero only with observed traffic. N/A: no traffic or insufficient scrape history; inspect target health separately."
     },
     {
       "id": 3,
@@ -82,16 +84,18 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m]))) and on (namespace) ((sum by (namespace) (rate(ticket_http_request_duration_seconds_count{status=~\"2..\"}[1m]))) > 0)",
           "legendFormat": "{{namespace}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "s"
+          "unit": "s",
+          "noValue": "N/A"
         },
         "overrides": []
-      }
+      },
+      "description": "Estimated p95 of observed successful requests. N/A: no successful observations or insufficient scrape history; never interpreted as zero latency."
     },
     {
       "id": 4,

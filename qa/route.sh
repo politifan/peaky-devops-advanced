@@ -141,6 +141,9 @@ kubectl --context kind-dva-course -n monitoring rollout status deployment/promet
 kubectl --context kind-dva-course -n monitoring rollout status deployment/grafana --timeout=180s
 kubectl --context kind-dva-course -n monitoring exec deployment/prometheus -- promtool check config /etc/prometheus/prometheus.yml
 kubectl --context kind-dva-course -n monitoring exec deployment/prometheus -- promtool check rules /etc/prometheus/rules.yml
+kubectl --context kind-dva-course -n monitoring exec -i deployment/prometheus -- promtool test rules /dev/stdin < monitoring/dashboard-promql.test.yml
+# Offline expression fixtures only; no samples are injected into the running server.
+kubectl --context kind-dva-course -n monitoring exec -i deployment/prometheus -- promtool test rules /dev/stdin < monitoring/dashboard-promql.test.yml
 kubectl --context kind-dva-course -n monitoring port-forward service/prometheus 19090:9090 > evidence/prometheus-port.txt 2>&1 &
 sleep 3
 curl -fsS http://127.0.0.1:19090/api/v1/targets > evidence/targets.json
@@ -166,6 +169,8 @@ done
 echo 'Alert verified: pending -> firing -> resolved; old data preserved'
 kubectl --context kind-dva-course -n monitoring port-forward service/grafana 13000:3000 > evidence/grafana-port.txt 2>&1 &
 sleep 3
+# Dashboard capture first sends real dev/stage GET /tickets and polls Prometheus
+# for healthy targets, observed traffic, histogram counts and finite panel values.
 .venv-ui/bin/python qa/capture_ui.py dashboard
 
 echo '=== Backup, full SQL restore, HTTP comparison ==='
@@ -184,9 +189,24 @@ echo '=== One CI-checked registry digest promoted dev then stage ==='
 kubectl --context kind-dva-course -n dev delete deployment/ticket-api service/ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f chart/values-dev.yaml --atomic --wait --timeout 180s
 ./lab build-check
+first_build=$(cat evidence/latest-build.txt)
+test -s "$first_build/manifest.json"; test -s "$first_build/http.json"
+jq -e '.http_check_passed == true' "$first_build/manifest.json" >/dev/null
+jq -e '.passed == true' "$first_build/http.json" >/dev/null
+first_manifest_sha=$(sha256sum "$first_build/manifest.json" | awk '{print $1}')
+./lab build-check
+second_build=$(cat evidence/latest-build.txt)
+test "$first_build" != "$second_build"
+test -s "$second_build/manifest.json"; test -s "$second_build/http.json"
+jq -e '.http_check_passed == true' "$second_build/manifest.json" >/dev/null
+jq -e '.passed == true' "$second_build/http.json" >/dev/null
+test "$first_manifest_sha" = "$(sha256sum "$first_build/manifest.json" | awk '{print $1}')"
+jq -n --arg first "$first_build" --arg second "$second_build" --arg hash "$first_manifest_sha" \
+ '{first_artifact:$first,second_artifact:$second,first_manifest_sha256:$hash,first_manifest_preserved:true,both_http_checks_passed:true}' > evidence/repeated-build-check.json
+echo 'Two build-check attempts passed; distinct artifact directories and preserved first manifest'
 ./lab registry
 # Test the node's actual CRI path, not only the host's successful push.
-./lab deploy --artifact "$(cat evidence/latest-build.txt)" --commit "$GITHUB_SHA"
+./lab deploy --artifact "$second_build" --commit "$GITHUB_SHA"
 ./lab http --base http://127.0.0.1:18230 --read-id "$old" --expected evidence/old-kube.json --out evidence/promoted-old-http.json
 
 echo '=== Small reproducible load using supplied profile ==='

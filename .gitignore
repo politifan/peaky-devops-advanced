@@ -9,6 +9,8 @@ infra/local.tfvars
 *.dump
 *.sqlite
 __pycache__/
+.pytest_cache/
 backups/
 foundation/.runtime/
 ansible/inventory.ini
+

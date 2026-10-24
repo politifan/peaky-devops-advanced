@@ -1,0 +1,149 @@
+{
+  "rule_files": [],
+  "evaluation_interval": "5s",
+  "tests": [
+    {
+      "interval": "5s",
+      "name": "Successful traffic without any 5xx series: actual zero ratio and finite p95",
+      "input_series": [
+        {
+          "series": "ticket_http_requests_total{namespace=\"dev\",status=\"200\"}",
+          "values": "0+5x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"0.1\"}",
+          "values": "0+5x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"+Inf\"}",
+          "values": "0+5x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_count{namespace=\"dev\",status=\"200\"}",
+          "values": "0+5x24"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "exp_samples": [
+            {
+              "value": 0,
+              "labels": "{namespace=\"dev\"}"
+            }
+          ],
+          "eval_time": "1m",
+          "expr": "(((sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m]))) or on (namespace) (0 * (sum by (namespace) (rate(ticket_http_requests_total[1m]))))) / (sum by (namespace) (rate(ticket_http_requests_total[1m])))) and on (namespace) ((sum by (namespace) (rate(ticket_http_requests_total[1m]))) > 0)"
+        },
+        {
+          "exp_samples": [
+            {
+              "value": 0.095,
+              "labels": "{namespace=\"dev\"}"
+            }
+          ],
+          "eval_time": "1m",
+          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m]))) and on (namespace) ((sum by (namespace) (rate(ticket_http_request_duration_seconds_count{status=~\"2..\"}[1m]))) > 0)"
+        }
+      ]
+    },
+    {
+      "interval": "5s",
+      "name": "Observed server errors: actual nonzero ratio",
+      "input_series": [
+        {
+          "series": "ticket_http_requests_total{namespace=\"dev\",status=\"200\"}",
+          "values": "0+4x24"
+        },
+        {
+          "series": "ticket_http_requests_total{namespace=\"dev\",status=\"500\"}",
+          "values": "0+1x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"0.1\"}",
+          "values": "0+4x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"+Inf\"}",
+          "values": "0+4x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_count{namespace=\"dev\",status=\"200\"}",
+          "values": "0+4x24"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "exp_samples": [
+            {
+              "value": 0.2,
+              "labels": "{namespace=\"dev\"}"
+            }
+          ],
+          "eval_time": "1m",
+          "expr": "(((sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m]))) or on (namespace) (0 * (sum by (namespace) (rate(ticket_http_requests_total[1m]))))) / (sum by (namespace) (rate(ticket_http_requests_total[1m])))) and on (namespace) ((sum by (namespace) (rate(ticket_http_requests_total[1m]))) > 0)"
+        },
+        {
+          "exp_samples": [
+            {
+              "value": 0.095,
+              "labels": "{namespace=\"dev\"}"
+            }
+          ],
+          "eval_time": "1m",
+          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m]))) and on (namespace) ((sum by (namespace) (rate(ticket_http_request_duration_seconds_count{status=~\"2..\"}[1m]))) > 0)"
+        }
+      ]
+    },
+    {
+      "interval": "5s",
+      "name": "No traffic: neither ratio nor p95 is zero-filled",
+      "input_series": [
+        {
+          "series": "ticket_http_requests_total{namespace=\"dev\",status=\"200\"}",
+          "values": "0+0x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"0.1\"}",
+          "values": "0+0x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_bucket{namespace=\"dev\",status=\"200\",le=\"+Inf\"}",
+          "values": "0+0x24"
+        },
+        {
+          "series": "ticket_http_request_duration_seconds_count{namespace=\"dev\",status=\"200\"}",
+          "values": "0+0x24"
+        }
+      ],
+      "promql_expr_test": [
+        {
+          "exp_samples": [],
+          "eval_time": "1m",
+          "expr": "(((sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m]))) or on (namespace) (0 * (sum by (namespace) (rate(ticket_http_requests_total[1m]))))) / (sum by (namespace) (rate(ticket_http_requests_total[1m])))) and on (namespace) ((sum by (namespace) (rate(ticket_http_requests_total[1m]))) > 0)"
+        },
+        {
+          "exp_samples": [],
+          "eval_time": "1m",
+          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m]))) and on (namespace) ((sum by (namespace) (rate(ticket_http_request_duration_seconds_count{status=~\"2..\"}[1m]))) > 0)"
+        }
+      ]
+    },
+    {
+      "interval": "5s",
+      "name": "Missing telemetry: no fabricated namespace samples",
+      "input_series": [],
+      "promql_expr_test": [
+        {
+          "exp_samples": [],
+          "eval_time": "1m",
+          "expr": "(((sum by (namespace) (rate(ticket_http_requests_total{status=~\"5..\"}[1m]))) or on (namespace) (0 * (sum by (namespace) (rate(ticket_http_requests_total[1m]))))) / (sum by (namespace) (rate(ticket_http_requests_total[1m])))) and on (namespace) ((sum by (namespace) (rate(ticket_http_requests_total[1m]))) > 0)"
+        },
+        {
+          "exp_samples": [],
+          "eval_time": "1m",
+          "expr": "histogram_quantile(0.95, sum by (le, namespace) (rate(ticket_http_request_duration_seconds_bucket{status=~\"2..\"}[1m]))) and on (namespace) ((sum by (namespace) (rate(ticket_http_request_duration_seconds_count{status=~\"2..\"}[1m]))) > 0)"
+        }
+      ]
+    }
+  ]
+}
