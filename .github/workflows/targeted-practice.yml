@@ -1,0 +1,44 @@
+name: Targeted advanced practice acceptance
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/devops-quality-20261023]
+    paths:
+      - qa/targeted-practice/**
+      - .github/workflows/targeted-practice.yml
+permissions:
+  contents: read
+jobs:
+  practice:
+    if: github.ref == 'refs/heads/codex/devops-quality-20261023'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [ansible, load]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Safe wrapper unit tests
+        run: python -m unittest discover -s qa/targeted-practice -p 'test_replay.py' -v
+      - name: Official Ubuntu packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq unzip
+      - name: Exact reviewed disposable replay
+        env:
+          MODE: ${{ matrix.mode }}
+        run: python qa/targeted-practice/replay.py "$MODE" --root "$GITHUB_WORKSPACE" --report "$RUNNER_TEMP/targeted-practice" --execute --confirm "targeted-$MODE"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: advanced-targeted-${{ matrix.mode }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/targeted-practice/summary.json
+            ${{ runner.temp }}/targeted-practice/sanitized.log
+          retention-days: 14
+          if-no-files-found: warn
+      # No reset/cleanup, no runtime credentials/dumps/raw logs in artifacts. VM disposal owns cleanup.

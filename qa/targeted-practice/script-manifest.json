@@ -1,0 +1,10 @@
+{
+  "ansible": {
+    "script": "qa/route.sh",
+    "sha256": "5ff04fecc2ae0a0b4cab1710fa2475ee9bff53a19ebc1548dfc23d2579018d4c"
+  },
+  "load": {
+    "script": "qa/load.sh",
+    "sha256": "5b970d0d13e90962ed57fd1f833f13a823997fc5174ab793eff105ae33641846"
+  }
+}
