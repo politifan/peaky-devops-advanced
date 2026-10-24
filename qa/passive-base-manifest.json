@@ -1,0 +1,33 @@
+{
+  "base_commit": "fe49b839ff9f2d6bb5db9c2f0c02e1fa684a0ede",
+  "hash_method": "UTF8 text CRLF normalized and trailing newlines normalized to one; code content exact",
+  "unchanged_base_files": [
+    {
+      "path": "ci/deploy.py",
+      "canonical_text_sha256": "6ad404692f6c299cc172c60e6b20e6dc5cd111fa1aa383f3d31b9adc8d7dbb58"
+    },
+    {
+      "path": "k8s/kind.yaml",
+      "canonical_text_sha256": "50b191fccdcfd1be525fbb1af29b31f68e8305588834620241e30ad8dccd710c"
+    },
+    {
+      "path": "ops/guard.py",
+      "canonical_text_sha256": "5db741abc873c1cfa90ab3d1558e9676fd5e1cc86569f58250445e47b3c3656e"
+    },
+    {
+      "path": ".github/workflows/course-route.yml",
+      "canonical_text_sha256": "64ea459ee19e1350f42ea44de634278feec25896bee6584ba60338a4fd3bcb18"
+    },
+    {
+      "path": "ticket-lab/ops/internal_check.py",
+      "canonical_text_sha256": "403a55cfaf7b95eddbc16da3d7b8ed497a5ce5c6d44a242acb4fc26b54c482c4"
+    }
+  ],
+  "qa_route_base_canonical_sha256": "846a300333da4d5ed1621a0544b8ab08d74b0164ea6c73d6b748e5b34cf21774",
+  "instrumented_route_canonical_sha256": "d47c55a8d3b89bfe60ce930c66febef40879db02fb0eea7a88e19352aa27b6ef",
+  "qa_route_insertions": [
+    "passive_observer_pid=''\n",
+    "\n if [ -n \"$passive_observer_pid\" ]; then\n  kill -TERM \"$passive_observer_pid\" 2>/dev/null || true\n  wait \"$passive_observer_pid\" || true\n fi",
+    "# Passive QA-only collector starts before both build/push and upgrade.\n# It never waits for endpoint convergence or changes the Helm/hook outcome.\nif [ \"${DVA_PASSIVE_OBSERVER:-0}\" = 1 ]; then\n python3 qa/routing_observer.py --root \"$PWD\" --duration 600 > .runtime/passive-observer.log 2>&1 &\n passive_observer_pid=$!\nfi\n"
+  ]
+}

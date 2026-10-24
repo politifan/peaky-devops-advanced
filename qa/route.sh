@@ -2,8 +2,13 @@
 set -euo pipefail
 export PATH="$PWD/.tools/bin:$PATH"
 mkdir -p evidence .runtime
+passive_observer_pid=''
 diagnostics() {
  code=$?
+ if [ -n "$passive_observer_pid" ]; then
+  kill -TERM "$passive_observer_pid" 2>/dev/null || true
+  wait "$passive_observer_pid" || true
+ fi
  if [ "$code" -ne 0 ]; then
   kubectl --context kind-dva-course get pods,jobs -A -o wide > evidence/failure-pods.txt 2>&1 || true
   kubectl --context kind-dva-course get events -A --sort-by=.metadata.creationTimestamp > evidence/failure-events.txt 2>&1 || true
@@ -194,6 +199,12 @@ kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api 
 echo '=== One CI-checked registry digest promoted dev then stage ==='
 kubectl --context kind-dva-course -n dev delete deployment/ticket-api service/ticket-api
 helm --kube-context kind-dva-course upgrade --install ticket-api chart -n dev -f chart/values-dev.yaml --atomic --wait --timeout 180s
+# Passive QA-only collector starts before both build/push and upgrade.
+# It never waits for endpoint convergence or changes the Helm/hook outcome.
+if [ "${DVA_PASSIVE_OBSERVER:-0}" = 1 ]; then
+ python3 qa/routing_observer.py --root "$PWD" --duration 600 > .runtime/passive-observer.log 2>&1 &
+ passive_observer_pid=$!
+fi
 ./lab build-check
 first_build=$(cat evidence/latest-build.txt)
 test -s "$first_build/manifest.json"; test -s "$first_build/http.json"
@@ -225,3 +236,4 @@ after=$(kubectl --context kind-dva-course -n dev exec postgres-0 -- psql -U post
 test "$before" = "$after"
 echo "Read-only load preserved $before records"
 echo 'ROUTE PASS: actual operations, negative cases and preserved old record'
+

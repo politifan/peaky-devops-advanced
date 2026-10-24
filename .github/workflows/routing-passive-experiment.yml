@@ -1,0 +1,80 @@
+name: Advanced passive ungated TCP observation
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/devops-quality-20261023]
+    paths:
+      - qa/routing_observer.py
+      - qa/export_passive_report.py
+      - qa/check_passive_base.py
+      - qa/passive-base-manifest.json
+      - qa/check_passive_bpf.py
+      - safety_tests/test_passive_observer.py
+      - .github/workflows/routing-passive-experiment.yml
+permissions:
+  contents: read
+jobs:
+  route:
+    if: github.ref == 'refs/heads/codex/devops-quality-20261023'
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        arm: [control, passive]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      DVA_ROUTING_DIAGNOSTIC: "0"
+      DVA_PASSIVE_OBSERVER: ${{ matrix.arm == 'passive' && '1' || '0' }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with: {persist-credentials: false, fetch-depth: 0}
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with: {python-version: '3.12'}
+      - name: Verify immutable base and offline observer tests
+        run: |
+          git merge-base --is-ancestor fe49b839ff9f2d6bb5db9c2f0c02e1fa684a0ede HEAD
+          python qa/check_passive_base.py
+          bash -n qa/route.sh
+          python -m unittest discover -s safety_tests -p test_passive_observer.py -v
+      - name: Dependencies used by the existing ordinary route
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y ansible jq unzip
+          chmod +x lab scripts/*.sh
+          ./lab tools
+          python -m venv .venv-ui
+          .venv-ui/bin/pip install playwright==1.55.0
+      - name: Passive read-only metadata tools in this disposable runner
+        if: matrix.arm == 'passive'
+        run: |
+          sudo apt-get install -y tcpdump conntrack util-linux
+          python qa/check_passive_bpf.py
+      - name: Existing full route without convergence gate or added HTTP retries
+        run: |
+          set +e
+          bash qa/route.sh > course-route.log 2>&1
+          route_code=$?
+          printf '%s\n' "$route_code" > .runtime/passive-route-exit.txt
+          printf 'ordinary route exit=%s; arm=%s\n' "$route_code" '${{ matrix.arm }}'
+          exit "$route_code"
+      - name: Export only bounded metadata
+        id: export_metadata
+        if: always()
+        run: |
+          route_code=125
+          if [ -f .runtime/passive-route-exit.txt ]; then route_code=$(cat .runtime/passive-route-exit.txt); fi
+          python qa/export_passive_report.py --root . --exit-code "$route_code"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always() && steps.export_metadata.outcome == 'success'
+        with:
+          name: advanced-passive-${{ matrix.arm }}-${{ github.run_id }}
+          path: |
+            evidence/passive-routing/route-summary.json
+            evidence/passive-routing/*/metadata.json
+            evidence/passive-routing/*/summary.json
+            evidence/passive-routing/*/events.jsonl
+            evidence/passive-routing/*/rules.jsonl
+            evidence/passive-routing/*/hook-phases.jsonl
+          if-no-files-found: warn
+          retention-days: 3
