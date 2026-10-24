@@ -28,9 +28,8 @@ def main():
  run('docker','exec',node,'crictl','pull',ref)
  for ns in ['dev','stage']:
   run('helm','--kube-context','kind-dva-course','upgrade','ticket-api',str(ROOT/'chart'),'-n',ns,'-f',str(ROOT/'chart'/('values-'+ns+'.yaml')),'--set-string','image.ref='+ref,'--set-string','releaseLabel=ci-'+a.commit,'--atomic','--wait','--timeout','180s')
-  run('helm','--kube-context','kind-dva-course','test','ticket-api','-n',ns,'--timeout','60s')
+  run('helm','--kube-context','kind-dva-course','test','ticket-api','-n',ns,'--timeout','60s','--logs')
   run('python3',str(ROOT/'ops/http_check.py'),'--base','http://127.0.0.1:'+('18220' if ns=='dev' else '18230'),'--out','evidence/deploy-'+ns+'-'+uuid.uuid4().hex[:8]+'.json')
  (ROOT/'evidence/deployed-image.json').write_text(json.dumps({'commit':a.commit,'image_ref':ref,'source':m},indent=2))
  print('One checked registry digest passed dev then stage: '+ref)
 if __name__=='__main__':main()
-
