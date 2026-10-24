@@ -84,6 +84,9 @@ def main():
  for ns in ['dev','stage']:
   with network_watch(ns):
    run('helm','--kube-context','kind-dva-course','upgrade','ticket-api',str(ROOT/'chart'),'-n',ns,'-f',str(ROOT/'chart'/('values-'+ns+'.yaml')),'--set-string','image.ref='+ref,'--set-string','releaseLabel=ci-'+a.commit,'--atomic','--wait','--timeout','180s')
+   if __import__('os').environ.get('DVA_ROUTING_DIAGNOSTIC') == '1':
+    from convergence import guarded_gate
+    guarded_gate(ROOT, ns, ROOT/'evidence'/('convergence-'+ns+'.jsonl'))
    run('helm','--kube-context','kind-dva-course','test','ticket-api','-n',ns,'--timeout','60s','--logs')
   run('python3',str(ROOT/'ops/http_check.py'),'--base','http://127.0.0.1:'+('18220' if ns=='dev' else '18230'),'--out','evidence/deploy-'+ns+'-'+uuid.uuid4().hex[:8]+'.json')
  (ROOT/'evidence/deployed-image.json').write_text(json.dumps({'commit':a.commit,'image_ref':ref,'source':m},indent=2))
