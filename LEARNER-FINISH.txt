@@ -1,0 +1,52 @@
+Peaky Minds DevOps advanced. Дополнение 26.10.2026
+
+Команды выполняются по порядку соответствующих уроков, из корня своей Linux-копии. Не выполнять все разделы одним скриптом. Цели и номера берутся из собственного запуска.
+
+Ручной возврат к выбранной revision
+В своей stage после штатной передачи API под управление Helm сохраните исправную revision из history. Замените 1 на номер своего исправного deployed-релиза; не выбирайте номер failed-релиза. Сохраните старую заявку, прежде чем изменять readiness. Это отдельный опыт без --atomic, поэтому возврат выполняется явно:
+
+./lab guard
+helm history ticket-api --kube-context kind-dva-course -n stage
+good_revision=1
+helm upgrade ticket-api chart --kube-context kind-dva-course -n stage -f chart/values-stage.yaml --set probes.readinessPath=/missing --wait --timeout 45s
+# Ожидается ненулевой код; запишите его сразу: echo $?
+helm rollback ticket-api "$good_revision" --kube-context kind-dva-course -n stage --wait --timeout 180s
+helm history ticket-api --kube-context kind-dva-course -n stage
+
+Старая Ready-реплика может продолжать обслуживать запросы во время неудачного rollout: maxUnavailable=0. Нельзя выдавать этот опыт за полную недоступность сервиса. После возврата подтвердите выбранную конфигурацию, старый ID и его поля. Номер новой revision возврата отличается от good_revision. SQL-схема в этом опыте не менялась.
+
+Отказ по повреждённому dump до создания цели
+Сначала выполните штатную копию при остановленных писателях и присвойте backup_dir точный напечатанный путь. Исходную копию сохраняем. mktemp создаёт новую папку, а три cp копируют только файлы этой синтетической учебной копии. printf дописывает один байт в копию dump, поэтому прежний manifest.sha256 перестаёт соответствовать файлу:
+
+bad_dir=$(mktemp -d backups/bad-copy.XXXXXX)
+cp "$backup_dir/manifest.json" "$bad_dir/manifest.json"
+cp "$backup_dir/snapshot.json" "$bad_dir/snapshot.json"
+cp "$backup_dir/ticket.dump" "$bad_dir/ticket.dump"
+printf X >> "$bad_dir/ticket.dump"
+bad_ns=restore-$(date -u +%Y%m%d%H%M%S)
+./lab guard
+kubectl --context kind-dva-course get namespace "$bad_ns"
+# Продолжайте только если NotFound, а не ошибка доступа/соединения.
+./lab restore "$bad_dir" --destination "$bad_ns"
+# Ожидается ненулевой код; запишите его сразу: echo $?
+kubectl --context kind-dva-course get namespace "$bad_ns"
+
+До и после отказа цель должна отсутствовать. Не подменяйте manifest новым hash повреждённого файла. Отказ другого типа, например недоступность кластера, не подтверждает работу checksum. Для штатного восстановления используйте исходный backup_dir и новое свободное имя.
+
+Post-copy заявка и сравнение до первой записи в восстановленную БД
+После завершения backup верните источник stage и создайте в нём отдельную запись. Файл post-copy.json ниже должен быть новым; curl --fail-with-body завершится ненулевым кодом на HTTP-ошибке. Сохраните время клиента — в таблице tickets нет поля created_at, timestamp БД придумывать нельзя.
+
+./lab guard
+kubectl --context kind-dva-course -n stage scale deployment ticket-api --replicas=2
+kubectl --context kind-dva-course -n stage rollout status deployment/ticket-api --timeout=120s
+date -u +%Y-%m-%dT%H:%M:%SZ
+curl --fail-with-body -sS -H 'Content-Type: application/json' -d '{"title":"post-copy-stage-marker"}' http://127.0.0.1:18230/tickets
+date -u +%Y-%m-%dT%H:%M:%SZ
+
+Сохраните выданный id/title/status в новый файл evidence/post-copy.json и обозначьте post_id полученным числом. Восстановите исходную копию и откройте port-forward по RUNBOOK. До запуска ./lab http (он сам делает новые записи) выполните два обычных GET:
+
+post_id=123
+curl -sS -i "http://127.0.0.1:18230/tickets/$post_id"
+curl -sS -i "http://127.0.0.1:18400/tickets/$post_id"
+
+123 — пример, его обязательно заменяют своим ID. В источнике ожидается 200 с сохранёнными полями, в новой цели до любых новых записей — 404. Затем подтвердите прежнюю заявку через ./lab http --read-id и --expected. После новых записей восстановленная sequence может снова выдать тот же числовой ID; это уже другой момент и сам по себе не опровергает отсутствие post-copy события в копии. Полный SQL-снимок restore сравнивает до старта API. Граница RTO заканчивается успешной полезной операцией HTTP, а не временем SQL-скрипта.
